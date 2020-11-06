@@ -1,0 +1,4 @@
+name = "MLJLIBSVMInteface"
+uuid = "61c7150f-6c77-4bb1-949c-13197eac2a52"
+authors = ["Anthony D. Blaom <anthony.blaom@gmail.com>"]
+version = "0.1.0"
