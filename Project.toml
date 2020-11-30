@@ -1,7 +1,7 @@
 name = "MLJLIBSVMInterface"
 uuid = "61c7150f-6c77-4bb1-949c-13197eac2a52"
 authors = ["Anthony D. Blaom <anthony.blaom@gmail.com>"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 LIBSVM = "b1bec4e5-fd48-53fe-b0cb-9723c09d164b"
