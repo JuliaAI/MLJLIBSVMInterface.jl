@@ -90,12 +90,3 @@ ocpred = MLJBase.transform(oneclasssvm,
 @test isapprox((length(train) - sum(MLJBase.transform(oneclasssvm, fitresultoc, selectrows(X, train)) .== true)) / length(train), oneclasssvm.nu, atol=0.005)
 @test isapprox((length(test) - sum(ocpred .== true))  / length(test), oneclasssvm.nu, atol=0.05)
 
-
-## INFO
-
-info_dict(LinearSVC)
-info_dict(SVC)
-info_dict(NuSVC)
-info_dict(NuSVR)
-info_dict(EpsilonSVR)
-info_dict(OneClassSVM)
