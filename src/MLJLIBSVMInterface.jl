@@ -14,6 +14,9 @@ using Statistics
 const MMI = MLJModelInterface
 const PKG = "MLJLIBSVMInterface"
 
+
+# # MODEL TYPES
+
 """
     LinearSVC(; kwargs...)
 
@@ -47,7 +50,7 @@ function LinearSVC(
         ,bias
     )
 
-    message = MMI.clean!(model)   #> future proof by including these
+    message = MMI.clean!(model)
     isempty(message) || @warn message #> two lines even if no clean! defined below
 
     return model
@@ -311,9 +314,28 @@ function EpsilonSVR(
     return model
 end
 
+# all SVM models defined here:
+const SVM = Union{LinearSVC, SVC, NuSVC, NuSVR, EpsilonSVR, OneClassSVM}
 
-const SVM = Union{LinearSVC, SVC, NuSVC, NuSVR, EpsilonSVR, OneClassSVM} # all SVM models defined here
 
+# # CLEAN METHOD
+
+const WARN_PRECOMPUTED_KERNEL =
+    "Pre-computed kernels are not supported by installed version of "*
+    "MLJLIBSVMInterface.jl. Using `LIBSVM.Kernel.RadialBasis` instead. "
+
+function MMI.clean!(model::SVM)
+    message = ""
+    if !(model isa LinearSVC) &&
+        model.kernel == LIBSVM.Kernel.Precomputed
+        message *= WARN_PRECOMPUTED_KERNEL
+        model.kernel = LIBSVM.Kernel.RadialBasis
+    end
+    return message
+end
+
+
+# # FIT METHOD
 
 """
     map_model_type(model::SVM)
@@ -353,7 +375,6 @@ function get_svm_parameters(model::Union{SVC, NuSVC, NuSVR, EpsilonSVR, OneClass
 
     return params
 end
-
 
 function MMI.fit(model::LinearSVC, verbosity::Int, X, y)
 
@@ -457,6 +478,8 @@ function MMI.transform(model::OneClassSVM, fitresult, Xnew)
     (p,d) = LIBSVM.svmpredict(fitresult, MMI.matrix(Xnew)')
     return MMI.categorical(p)
 end
+
+
 
 
 # metadata

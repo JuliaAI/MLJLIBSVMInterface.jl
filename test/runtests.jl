@@ -4,7 +4,7 @@ using LinearAlgebra
 
 using MLJLIBSVMInterface
 import StableRNGs
-
+import LIBSVM
 
 ## CLASSIFIERS
 
@@ -90,3 +90,8 @@ ocpred = MLJBase.transform(oneclasssvm,
 @test isapprox((length(train) - sum(MLJBase.transform(oneclasssvm, fitresultoc, selectrows(X, train)) .== true)) / length(train), oneclasssvm.nu, atol=0.005)
 @test isapprox((length(test) - sum(ocpred .== true))  / length(test), oneclasssvm.nu, atol=0.05)
 
+## PRECOMPUTED KERNELS
+
+model = @test_logs((:warn, MLJLIBSVMInterface.WARN_PRECOMPUTED_KERNEL),
+                   SVC(kernel=LIBSVM.Kernel.Precomputed))
+@test model.kernel == LIBSVM.Kernel.RadialBasis
