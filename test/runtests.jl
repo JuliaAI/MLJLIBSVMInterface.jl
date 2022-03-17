@@ -31,6 +31,15 @@ lcpred = MLJBase.predict(linear_classifier, fitresultCL, selectrows(X, test));
 @test Set(classes(nucpred[1])) == Set(classes(y[1]))
 @test Set(classes(lcpred[1])) == Set(classes(y[1]))
 
+fpC = MLJBase.fitted_params(plain_classifier, fitresultC)
+fpCnu = MLJBase.fitted_params(nu_classifier, fitresultCnu)
+fpCL = MLJBase.fitted_params(linear_classifier, fitresultCL)
+
+for fp in [fpC, fpCnu, fpCL]
+    @test keys(fp) == (:libsvm_model, :encoding)
+    @test fp.encoding[int(MLJBase.classes(y)[1])] == classes(y)[1]
+end
+
 rng = StableRNGs.StableRNG(123)
 
 # test with linear data:
@@ -68,6 +77,13 @@ fitresultR, cacheR, reportR = MLJBase.fit(plain_regressor, 1,
 fitresultRnu, cacheRnu, reportRnu = MLJBase.fit(nu_regressor, 1,
                                                 selectrows(X, train), y[train]);
 
+fpR = MLJBase.fitted_params(plain_regressor, fitresultR)
+fpRnu = MLJBase.fitted_params(nu_regressor, fitresultRnu)
+
+for fp in [fpR, fpRnu]
+    @test fp.libsvm_model isa LIBSVM.SVM
+end
+
 rpred = MLJBase.predict(plain_regressor, fitresultR, selectrows(X, test));
 nurpred = MLJBase.predict(nu_regressor, fitresultRnu, selectrows(X, test));
 
@@ -80,7 +96,11 @@ nurpred = MLJBase.predict(nu_regressor, fitresultRnu, selectrows(X, test));
 oneclasssvm = OneClassSVM()
 
 fitresultoc, cacheoc, reportoc = MLJBase.fit(oneclasssvm, 1,
-                                          selectrows(X, train));
+                                             selectrows(X, train));
+
+fp = MLJBase.fitted_params(oneclasssvm, fitresultoc)
+@test fp.libsvm_model isa LIBSVM.SVM
+
 # output is CategoricalArray{Bool}
 ocpred = MLJBase.transform(oneclasssvm,
                            fitresultoc,

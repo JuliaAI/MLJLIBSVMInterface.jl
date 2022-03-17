@@ -376,6 +376,11 @@ function get_svm_parameters(model::Union{SVC, NuSVC, NuSVR, EpsilonSVR, OneClass
     return params
 end
 
+function get_encoding(decoder)
+    refs = MMI.int.(decoder.classes)
+    return Dict(i => decoder(i) for i in refs)
+end
+
 function MMI.fit(model::LinearSVC, verbosity::Int, X, y)
 
     Xmatrix = MMI.matrix(X)' # notice the transpose
@@ -395,6 +400,9 @@ function MMI.fit(model::LinearSVC, verbosity::Int, X, y)
 
     return fitresult, cache, report
 end
+
+MMI.fitted_params(::LinearSVC, fitresult) =
+    (libsvm_model=fitresult[1], encoding=get_encoding(fitresult[2]))
 
 function MMI.fit(model::Union{SVC, NuSVC}, verbosity::Int, X, y)
 
@@ -418,6 +426,10 @@ function MMI.fit(model::Union{SVC, NuSVC}, verbosity::Int, X, y)
     return fitresult, cache, report
 end
 
+MMI.fitted_params(::Union{SVC, NuSVC}, fitresult) =
+    (libsvm_model=fitresult[1], encoding=get_encoding(fitresult[2]))
+
+
 function MMI.fit(model::Union{NuSVR, EpsilonSVR}, verbosity::Int, X, y)
 
     Xmatrix = MMI.matrix(X)' # notice the transpose
@@ -436,6 +448,10 @@ function MMI.fit(model::Union{NuSVR, EpsilonSVR}, verbosity::Int, X, y)
 
     return fitresult, cache, report
 end
+
+MMI.fitted_params(::Union{NuSVR, EpsilonSVR}, fitresult) =
+    (libsvm_model=fitresult,)
+
 
 function MMI.fit(model::OneClassSVM, verbosity::Int, X)
 
@@ -456,6 +472,11 @@ function MMI.fit(model::OneClassSVM, verbosity::Int, X)
     return fitresult, cache, report
 end
 
+MMI.fitted_params(::OneClassSVM, fitresult) =
+    (libsvm_model=fitresult,)
+
+
+# # PREDICT METHODS
 
 function MMI.predict(model::LinearSVC, fitresult, Xnew)
     result, decode = fitresult
