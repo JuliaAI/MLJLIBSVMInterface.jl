@@ -68,7 +68,7 @@ used in fitting
 See also LinearSVC, NuSVC
 """
 mutable struct SVC <: MMI.Deterministic
-    kernel::LIBSVM.Kernel.KERNEL
+    kernel
     gamma::Float64
     weights::Union{Dict, Nothing}
     cost::Float64
@@ -81,7 +81,7 @@ mutable struct SVC <: MMI.Deterministic
 end
 
 function SVC(
-    ;kernel::LIBSVM.Kernel.KERNEL = LIBSVM.Kernel.RadialBasis
+    ;kernel = LIBSVM.Kernel.RadialBasis
     ,gamma::Float64 = 0.0
     ,weights::Union{Dict, Nothing} = nothing
     ,cost::Float64 = 1.0
@@ -124,7 +124,7 @@ used in fitting
 See also LinearSVC, SVC
 """
 mutable struct NuSVC <: MMI.Deterministic
-    kernel::LIBSVM.Kernel.KERNEL
+    kernel
     gamma::Float64
     weights::Union{Dict, Nothing}
     nu::Float64
@@ -137,7 +137,7 @@ mutable struct NuSVC <: MMI.Deterministic
 end
 
 function NuSVC(
-    ;kernel::LIBSVM.Kernel.KERNEL = LIBSVM.Kernel.RadialBasis
+    ;kernel = LIBSVM.Kernel.RadialBasis
     ,gamma::Float64 = 0.0
     ,weights::Union{Dict, Nothing} = nothing
     ,nu::Float64 = 0.5
@@ -168,7 +168,7 @@ function NuSVC(
 end
 
 mutable struct OneClassSVM <: MMI.Unsupervised
-    kernel::LIBSVM.Kernel.KERNEL
+    kernel
     gamma::Float64
     nu::Float64
     cost::Float64
@@ -180,7 +180,7 @@ mutable struct OneClassSVM <: MMI.Unsupervised
 end
 
 function OneClassSVM(
-    ;kernel::LIBSVM.Kernel.KERNEL = LIBSVM.Kernel.RadialBasis
+    ;kernel = LIBSVM.Kernel.RadialBasis
     ,gamma::Float64 = 0.0
     ,nu::Float64 = 0.1
     ,cost::Float64 = 1.0
@@ -221,7 +221,7 @@ used in fitting
 See also EpsilonSVR
 """
 mutable struct NuSVR <: MMI.Deterministic
-    kernel::LIBSVM.Kernel.KERNEL
+    kernel
     gamma::Float64
     nu::Float64
     cost::Float64
@@ -233,7 +233,7 @@ mutable struct NuSVR <: MMI.Deterministic
 end
 
 function NuSVR(
-    ;kernel::LIBSVM.Kernel.KERNEL = LIBSVM.Kernel.RadialBasis
+    ;kernel = LIBSVM.Kernel.RadialBasis
     ,gamma::Float64 = 0.0
     ,nu::Float64 = 0.5
     ,cost::Float64 = 1.0
@@ -274,7 +274,7 @@ used in fitting
 See also NuSVR
 """
 mutable struct EpsilonSVR <: MMI.Deterministic
-    kernel::LIBSVM.Kernel.KERNEL
+    kernel
     gamma::Float64
     epsilon::Float64
     cost::Float64
@@ -286,7 +286,7 @@ mutable struct EpsilonSVR <: MMI.Deterministic
 end
 
 function EpsilonSVR(
-    ;kernel::LIBSVM.Kernel.KERNEL = LIBSVM.Kernel.RadialBasis
+    ;kernel = LIBSVM.Kernel.RadialBasis
     ,gamma::Float64 = 0.0
     ,epsilon::Float64 = 0.1
     ,cost::Float64 = 1.0
@@ -320,17 +320,17 @@ const SVM = Union{LinearSVC, SVC, NuSVC, NuSVR, EpsilonSVR, OneClassSVM}
 
 # # CLEAN METHOD
 
-const WARN_PRECOMPUTED_KERNEL =
+const ERR_PRECOMPUTED_KERNEL = ArgumentError(
     "Pre-computed kernels are not supported by installed version of "*
-    "MLJLIBSVMInterface.jl. Using `LIBSVM.Kernel.RadialBasis` instead. "
+    "MLJLIBSVMInterface.jl. Alternatively, specify `kernel=k` for some "*
+    "function or callable `k(v1::AbstractVector, v2::AbstractVector)`. "
+)
 
 function MMI.clean!(model::SVM)
     message = ""
-    if !(model isa LinearSVC) &&
-        model.kernel == LIBSVM.Kernel.Precomputed
-        message *= WARN_PRECOMPUTED_KERNEL
-        model.kernel = LIBSVM.Kernel.RadialBasis
-    end
+    !(model isa LinearSVC) &&
+        model.kernel == LIBSVM.Kernel.Precomputed &&
+        throw(ERR_PRECOMPUTED_KERNEL)
     return message
 end
 
