@@ -1,10 +1,35 @@
 using MLJBase
 using Test
 using LinearAlgebra
+using CategoricalArrays
 
 using MLJLIBSVMInterface
 import StableRNGs
 import LIBSVM
+
+
+## HELPERS
+
+@testset "`fix_keys` and `encode` for weight dicts" begin
+    v = categorical(['a', 'b', 'b', 'c'])
+    weights = Dict('a' => 1.0, 'b' => 2.0, 'c' => 3.0)
+    vfixed = MLJLIBSVMInterface.fix_keys(weights, v)
+    @test vfixed[v[1]] == 1.0
+    @test vfixed[v[2]] == 2.0
+    @test vfixed[v[4]] == 3.0
+    @test length(keys(vfixed)) == 3
+    @test MLJLIBSVMInterface.fix_keys(vfixed, v) == vfixed
+
+    refs = int.(v)
+    weights_encoded = MLJLIBSVMInterface.encode(weights, v[1:end-1]) # exludes `c`
+    @test weights_encoded[refs[1]] == 1.0
+    @test weights_encoded[refs[2]] == 2.0
+    @test length(keys(weights_encoded)) ==  2
+
+    @test_throws(MLJLIBSVMInterface.err_bad_weights(levels(v)),
+                 MLJLIBSVMInterface.encode(Dict('d'=> 1.0), v))
+end
+
 
 ## CLASSIFIERS
 
