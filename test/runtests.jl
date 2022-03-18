@@ -1,10 +1,35 @@
 using MLJBase
 using Test
 using LinearAlgebra
+using CategoricalArrays
 
 using MLJLIBSVMInterface
 import StableRNGs
 import LIBSVM
+
+
+## HELPERS
+
+@testset "`fix_keys` and `encode` for weight dicts" begin
+    v = categorical(['a', 'b', 'b', 'c'])
+    weights = Dict('a' => 1.0, 'b' => 2.0, 'c' => 3.0)
+    vfixed = MLJLIBSVMInterface.fix_keys(weights, v)
+    @test vfixed[v[1]] == 1.0
+    @test vfixed[v[2]] == 2.0
+    @test vfixed[v[4]] == 3.0
+    @test length(keys(vfixed)) == 3
+    @test MLJLIBSVMInterface.fix_keys(vfixed, v) == vfixed
+
+    refs = int.(v)
+    weights_encoded = MLJLIBSVMInterface.encode(weights, v[1:end-1]) # exludes `c`
+    @test weights_encoded[refs[1]] == 1.0
+    @test weights_encoded[refs[2]] == 2.0
+    @test length(keys(weights_encoded)) ==  2
+
+    @test_throws(MLJLIBSVMInterface.err_bad_weights(levels(v)),
+                 MLJLIBSVMInterface.encode(Dict('d'=> 1.0), v))
+end
+
 
 ## CLASSIFIERS
 
@@ -138,3 +163,52 @@ yhat₂ = MLJBase.predict(model₂, fitresult₂, X);
 @test yhat == yhat₂
 
 @test accuracy(yhat, y) > 0.75
+
+model = @test_logs((:warn, MLJLIBSVMInterface.WARN_PRECOMPUTED_KERNEL),
+                   SVC(kernel=LIBSVM.Kernel.Precomputed))
+@test model.kernel == LIBSVM.Kernel.RadialBasis
+
+
+## WEIGHTS
+
+rng = StableRNGs.StableRNG(123)
+centers = [0 0;
+           0.1 0;
+           0.2 0]
+X, y = make_blobs(100, rng=rng, centers=centers,) # blobs close together
+
+train = eachindex(y)[y .!= 2]
+Xtrain = selectrows(X, train)
+ytrain = y[train] # the `2` class is not in here
+
+weights_uniform     = Dict(1=> 1.0, 2=> 1.0, 3=> 1.0)
+weights_favouring_3 = Dict(1=> 1.0, 2=> 1.0, 3=> 100.0)
+
+for model in [SVC(), LinearSVC()]
+
+    # without weights:
+    Θ, _, _ = MLJBase.fit(model, 0, Xtrain, ytrain)
+    yhat = predict(model, Θ, X);
+    @test levels(yhat) == levels(y) # the `2` class persists as a level
+
+    # with uniform weights:
+    Θ_uniform, _, _ = MLJBase.fit(model, 0, Xtrain, ytrain, weights_uniform)
+    yhat_uniform = predict(model, Θ_uniform, X);
+    @test levels(yhat_uniform) == levels(y)
+
+    # with weights favouring class `3`:
+    Θ_favouring_3, _, _ = MLJBase.fit(model, 0, Xtrain, ytrain, weights_favouring_3)
+    yhat_favouring_3 = predict(model, Θ_favouring_3, X);
+    @test levels(yhat_favouring_3) == levels(y)
+
+    # comparisons:
+    if !(model isa LinearSVC) # linear solver is not deterministic
+        @test yhat_uniform == yhat
+    end
+    d = sum(yhat_favouring_3 .== 3) - sum(yhat .== 3)
+    if d <= 0
+        @show model
+        @show d
+    end
+
+end

@@ -8,6 +8,7 @@ export OneClassSVM
 import MLJModelInterface
 import MLJModelInterface: Table, Continuous, Count, Finite, OrderedFactor,
                           Multiclass
+import CategoricalArrays
 import LIBSVM
 using Statistics
 
@@ -26,7 +27,6 @@ See also SVC, NuSVC
 """
 mutable struct LinearSVC <: MMI.Deterministic
     solver::LIBSVM.Linearsolver.LINEARSOLVER
-    weights::Union{Dict, Nothing}
     tolerance::Float64
     cost::Float64
     p::Float64
@@ -35,7 +35,6 @@ end
 
 function LinearSVC(
     ;solver::LIBSVM.Linearsolver.LINEARSOLVER = LIBSVM.Linearsolver.L2R_L2LOSS_SVC_DUAL
-    ,weights::Union{Dict, Nothing} = nothing
     ,tolerance::Float64 = Inf
     ,cost::Float64 = 1.0
     ,p::Float64 = 0.1
@@ -43,7 +42,6 @@ function LinearSVC(
 
     model = LinearSVC(
         solver
-        ,weights
         ,tolerance
         ,cost
         ,p
@@ -70,7 +68,6 @@ See also LinearSVC, NuSVC
 mutable struct SVC <: MMI.Deterministic
     kernel
     gamma::Float64
-    weights::Union{Dict, Nothing}
     cost::Float64
     cachesize::Float64
     degree::Int32
@@ -83,7 +80,6 @@ end
 function SVC(
     ;kernel = LIBSVM.Kernel.RadialBasis
     ,gamma::Float64 = 0.0
-    ,weights::Union{Dict, Nothing} = nothing
     ,cost::Float64 = 1.0
     ,cachesize::Float64=200.0
     ,degree::Int32 = Int32(3)
@@ -95,7 +91,6 @@ function SVC(
     model = SVC(
         kernel
         ,gamma
-        ,weights
         ,cost
         ,cachesize
         ,degree
@@ -126,7 +121,6 @@ See also LinearSVC, SVC
 mutable struct NuSVC <: MMI.Deterministic
     kernel
     gamma::Float64
-    weights::Union{Dict, Nothing}
     nu::Float64
     cost::Float64
     cachesize::Float64
@@ -139,7 +133,6 @@ end
 function NuSVC(
     ;kernel = LIBSVM.Kernel.RadialBasis
     ,gamma::Float64 = 0.0
-    ,weights::Union{Dict, Nothing} = nothing
     ,nu::Float64 = 0.5
     ,cost::Float64 = 1.0
     ,cachesize::Float64 = 200.0
@@ -151,7 +144,6 @@ function NuSVC(
     model = NuSVC(
         kernel
         ,gamma
-        ,weights
         ,nu
         ,cost
         ,cachesize
@@ -335,12 +327,23 @@ function MMI.clean!(model::SVM)
 end
 
 
-# # FIT METHOD
+# # HELPERS
+
+function err_bad_weights(keys)
+    keys_str = join(keys, ", ")
+    ArgumentError(
+    "Class weights must be a dictionary with these keys: $keys_str. "
+    )
+end
 
 """
     map_model_type(model::SVM)
 
-Helper function to map the model to the correct LIBSVM model type needed for function dispatch.
+Private method.
+
+Helper function to map the model to the correct LIBSVM model type
+needed for function dispatch.
+
 """
 function map_model_type(model::SVM)
     if isa(model, LinearSVC)
@@ -363,6 +366,8 @@ end
 """
     get_svm_parameters(model::Union{SVC, NuSVC, NuSVR, EpsilonSVR, OneClassSVM})
 
+Private method.
+
 Helper function to get the parameters from the SVM model struct.
 """
 function get_svm_parameters(model::Union{SVC, NuSVC, NuSVR, EpsilonSVR, OneClassSVM})
@@ -376,26 +381,66 @@ function get_svm_parameters(model::Union{SVC, NuSVC, NuSVR, EpsilonSVR, OneClass
     return params
 end
 
+# convert raw value `x` to a `CategoricalValue` using the pool of `v`:
+function categorical_value(x, v)
+    pool = CategoricalArrays.pool(v)
+    return pool[get(pool, x)]
+end
+
+# to ensure the keys of user-provided weights are `CategoricalValue`s:
+fix_keys(weights::Dict{<:CategoricalArrays.CategoricalValue}, y) = weights
+fix_keys(weights, y) =
+    Dict(categorical_value(x, y) => weights[x] for x in keys(weights))
+
+"""
+    encode(weights::Dict, y)
+
+Private method.
+
+Check that `weights` is a valid dictionary, based on the pool of `y`,
+and return a new dictionary whose keys are restricted to those
+appearing as elements of `y` (and not just appearing in the pool of
+`y`) and which are additionally replaced by their integer representations
+(the categorical reference integers).
+
+"""
+function encode(weights::Dict, y)
+    kys = CategoricalArrays.levels(y)
+    Set(keys(weights)) == Set(kys) || throw(err_bad_weights(kys))
+    _weights = fix_keys(weights, y)
+    levels_seen = unique(y) # not `CategoricalValue`s !
+    cvs = [categorical_value(x, y) for x in levels_seen]
+    return Dict(MMI.int(cv) => _weights[cv] for cv in cvs)
+end
+
 function get_encoding(decoder)
     refs = MMI.int.(decoder.classes)
     return Dict(i => decoder(i) for i in refs)
 end
 
-function MMI.fit(model::LinearSVC, verbosity::Int, X, y)
+
+# # FIT METHOD
+
+function MMI.fit(model::LinearSVC, verbosity::Int, X, y, weights=nothing)
 
     Xmatrix = MMI.matrix(X)' # notice the transpose
     y_plain = MMI.int(y)
     decode  = MMI.decoder(y[1]) # for predict method
 
-    cache = nothing
+    _weights = if weights == nothing
+        nothing
+    else
+        encode(weights, y)
+    end
 
     result = LIBSVM.LIBLINEAR.linear_train(y_plain, Xmatrix,
-        weights = model.weights, solver_type = Int32(model.solver),
+        weights = _weights, solver_type = Int32(model.solver),
         C = model.cost, p = model.p, bias = model.bias,
         eps = model.tolerance, verbose = ifelse(verbosity > 1, true, false)
     )
 
     fitresult = (result, decode)
+    cache = nothing
     report = nothing
 
     return fitresult, cache, report
@@ -404,23 +449,29 @@ end
 MMI.fitted_params(::LinearSVC, fitresult) =
     (libsvm_model=fitresult[1], encoding=get_encoding(fitresult[2]))
 
-function MMI.fit(model::Union{SVC, NuSVC}, verbosity::Int, X, y)
+function MMI.fit(model::Union{SVC, NuSVC}, verbosity::Int, X, y, weights=nothing)
 
     Xmatrix = MMI.matrix(X)' # notice the transpose
     y_plain = MMI.int(y)
     decode  = MMI.decoder(y[1]) # for predict method
 
-    cache = nothing
+    _weights = if weights == nothing
+        nothing
+    else
+        model isa NuSVC && error("`NuSVC` does not support class weights. ")
+        encode(weights, y)
+    end
 
     model = deepcopy(model)
     model.gamma == -1.0 && (model.gamma = 1.0/size(Xmatrix, 1))
     model.gamma == 0.0 && (model.gamma = 1.0/(var(Xmatrix) * size(Xmatrix, 1)) )
     result = LIBSVM.svmtrain(Xmatrix, y_plain;
-        get_svm_parameters(model)...,
-        verbose = ifelse(verbosity > 1, true, false)
-    )
+                             get_svm_parameters(model)..., weights=_weights,
+                             verbose = ifelse(verbosity > 1, true, false)
+                             )
 
     fitresult = (result, decode)
+    cache = nothing
     report = (gamma=model.gamma,)
 
     return fitresult, cache, report
@@ -500,9 +551,6 @@ function MMI.transform(model::OneClassSVM, fitresult, Xnew)
     return MMI.categorical(p)
 end
 
-
-
-
 # metadata
 MMI.load_path(::Type{<:LinearSVC}) = "$PKG.LinearSVC"
 MMI.load_path(::Type{<:SVC}) = "$PKG.SVC"
@@ -510,6 +558,9 @@ MMI.load_path(::Type{<:NuSVC}) = "$PKG.NuSVC"
 MMI.load_path(::Type{<:NuSVR}) = "$PKG.NuSVR"
 MMI.load_path(::Type{<:EpsilonSVR}) = "$PKG.EpsilonSVR"
 MMI.load_path(::Type{<:OneClassSVM}) = "$PKG.OneClassSVM"
+
+MMI.supports_class_weights(::Type{<:LinearSVC}) = true
+MMI.supports_class_weights(::Type{<:SVC}) = true
 
 MMI.package_name(::Type{<:SVM}) = "LIBSVM"
 MMI.package_uuid(::Type{<:SVM}) = "b1bec4e5-fd48-53fe-b0cb-9723c09d164b"
