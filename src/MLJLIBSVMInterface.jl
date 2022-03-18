@@ -446,6 +446,7 @@ function MMI.fit(model::Union{SVC, NuSVC}, verbosity::Int, X, y, weights=nothing
     _weights = if weights == nothing
         nothing
     else
+        model isa NuSVC && error("`NuSVC` does not support class weights. ")
         encode(weights, y)
     end
 
@@ -525,9 +526,6 @@ function MMI.transform(model::OneClassSVM, fitresult, Xnew)
     return MMI.categorical(p)
 end
 
-
-
-
 # metadata
 MMI.load_path(::Type{<:LinearSVC}) = "$PKG.LinearSVC"
 MMI.load_path(::Type{<:SVC}) = "$PKG.SVC"
@@ -535,6 +533,9 @@ MMI.load_path(::Type{<:NuSVC}) = "$PKG.NuSVC"
 MMI.load_path(::Type{<:NuSVR}) = "$PKG.NuSVR"
 MMI.load_path(::Type{<:EpsilonSVR}) = "$PKG.EpsilonSVR"
 MMI.load_path(::Type{<:OneClassSVM}) = "$PKG.OneClassSVM"
+
+MMI.supports_class_weights(::Type{<:LinearSVC}) = true
+MMI.supports_class_weights(::Type{<:SVC}) = true
 
 MMI.package_name(::Type{<:SVM}) = "LIBSVM"
 MMI.package_uuid(::Type{<:SVM}) = "b1bec4e5-fd48-53fe-b0cb-9723c09d164b"

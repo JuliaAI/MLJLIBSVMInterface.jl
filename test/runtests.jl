@@ -120,3 +120,48 @@ ocpred = MLJBase.transform(oneclasssvm,
 model = @test_logs((:warn, MLJLIBSVMInterface.WARN_PRECOMPUTED_KERNEL),
                    SVC(kernel=LIBSVM.Kernel.Precomputed))
 @test model.kernel == LIBSVM.Kernel.RadialBasis
+
+
+## WEIGHTS
+
+rng = StableRNGs.StableRNG(123)
+centers = [0 0;
+           0.1 0;
+           0.2 0]
+X, y = make_blobs(100, rng=rng, centers=centers,) # blobs close together
+
+train = eachindex(y)[y .!= 2]
+Xtrain = selectrows(X, train)
+ytrain = y[train] # the `2` class is not in here
+
+weights_uniform     = Dict(1=> 1.0, 2=> 1.0, 3=> 1.0)
+weights_favouring_3 = Dict(1=> 1.0, 2=> 1.0, 3=> 100.0)
+
+for model in [SVC(), LinearSVC()]
+
+    # without weights:
+    Θ, _, _ = MLJBase.fit(model, 0, Xtrain, ytrain)
+    yhat = predict(model, Θ, X);
+    @test levels(yhat) == levels(y) # the `2` class persists as a level
+
+    # with uniform weights:
+    Θ_uniform, _, _ = MLJBase.fit(model, 0, Xtrain, ytrain, weights_uniform)
+    yhat_uniform = predict(model, Θ_uniform, X);
+    @test levels(yhat_uniform) == levels(y)
+
+    # with weights favouring class `3`:
+    Θ_favouring_3, _, _ = MLJBase.fit(model, 0, Xtrain, ytrain, weights_favouring_3)
+    yhat_favouring_3 = predict(model, Θ_favouring_3, X);
+    @test levels(yhat_favouring_3) == levels(y)
+
+    # comparisons:
+    if !(model isa LinearSVC) # linear solver is not deterministic
+        @test yhat_uniform == yhat
+    end
+    d = sum(yhat_favouring_3 .== 3) - sum(yhat .== 3)
+    if d <= 0
+        @show model
+        @show d
+    end
+
+end
