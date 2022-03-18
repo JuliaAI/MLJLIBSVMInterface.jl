@@ -449,6 +449,7 @@ end
 MMI.fitted_params(::LinearSVC, fitresult) =
     (libsvm_model=fitresult[1], encoding=get_encoding(fitresult[2]))
 
+
 function MMI.fit(model::Union{SVC, NuSVC}, verbosity::Int, X, y, weights=nothing)
 
     Xmatrix = MMI.matrix(X)' # notice the transpose
