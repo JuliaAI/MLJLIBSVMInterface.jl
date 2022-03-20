@@ -18,18 +18,10 @@ const PKG = "MLJLIBSVMInterface"
 
 # # MODEL TYPES
 
-"""
-    LinearSVC(; kwargs...)
-
-Linear support vector machine classifier using LIBLINEAR: https://www.csie.ntu.edu.tw/~cjlin/liblinear/
-
-See also SVC, NuSVC
-"""
 mutable struct LinearSVC <: MMI.Deterministic
     solver::LIBSVM.Linearsolver.LINEARSOLVER
     tolerance::Float64
     cost::Float64
-    p::Float64
     bias::Float64
 end
 
@@ -37,14 +29,12 @@ function LinearSVC(
     ;solver::LIBSVM.Linearsolver.LINEARSOLVER = LIBSVM.Linearsolver.L2R_L2LOSS_SVC_DUAL
     ,tolerance::Float64 = Inf
     ,cost::Float64 = 1.0
-    ,p::Float64 = 0.1
     ,bias::Float64= -1.0)
 
     model = LinearSVC(
         solver
         ,tolerance
         ,cost
-        ,p
         ,bias
     )
 
@@ -563,6 +553,13 @@ MMI.load_path(::Type{<:OneClassSVM}) = "$PKG.OneClassSVM"
 MMI.supports_class_weights(::Type{<:LinearSVC}) = true
 MMI.supports_class_weights(::Type{<:SVC}) = true
 
+MMI.human_name(::Type{<:LinearSVC}) = "linear support vector classifier"
+MMI.human_name(::Type{<:SVC}) = "C-support vector classifier"
+MMI.human_name(::Type{<:NuSVC}) = "nu-support vector classifier"
+MMI.human_name(::Type{<:NuSVR}) = "nu-support vector regressor"
+MMI.human_name(::Type{<:EpsilonSVR}) = "epsilon-support vector regressor"
+MMI.human_name(::Type{<:OneClassSVM}) = "$one-class support vector machine"
+
 MMI.package_name(::Type{<:SVM}) = "LIBSVM"
 MMI.package_uuid(::Type{<:SVM}) = "b1bec4e5-fd48-53fe-b0cb-9723c09d164b"
 MMI.is_pure_julia(::Type{<:SVM}) = false
@@ -574,5 +571,7 @@ MMI.target_scitype(::Type{<:Union{NuSVR, EpsilonSVR}}) =
     AbstractVector{Continuous}
 MMI.output_scitype(::Type{<:OneClassSVM}) =
     AbstractVector{<:Finite{2}} # Bool (true means inlier)
+
+
 
 end # module
