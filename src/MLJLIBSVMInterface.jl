@@ -561,5 +561,468 @@ MMI.output_scitype(::Type{<:OneClassSVM}) =
     AbstractVector{<:Finite{2}} # Bool (true means inlier)
 
 
+# # DOCUMENT STRINGS
+
+const DOC_REFERENCE = "C.-C. Chang and C.-J. Lin (2011): \"LIBSVM: a library for "*
+    "support vector machines.\" *ACM Transactions on Intelligent Systems and "*
+    "Technology*, 2(3):27:1–27:27. Updated at "*
+    "[https://www.csie.ntu.edu.tw/~cjlin/papers/libsvm.pdf]"*
+    "(https://www.csie.ntu.edu.tw/~cjlin/papers/libsvm.pdf)"
+
+const DOC_ALGORITHM = "Reference for algorithm and core C-library: $DOC_REFERENCE. "
+
+const DOC_REFERENCE_LINEAR = "Rong-En Fan et al (2008): \"LIBLINEAR: A Library for "*
+    "Large Linear Classification.\" *Journal of Machine Learning Research* 9 1871-1874. "*
+    "Available at [https://www.csie.ntu.edu.tw/~cjlin/papers/liblinear.pdf]"*
+    "(https://www.csie.ntu.edu.tw/~cjlin/papers/liblinear.pdf)"
+
+const DOC_ALGORITHM_LINEAR = "Reference for algorithm and core C-library: "*
+    "$DOC_REFERENCE_LINEAR. "
+
+
+"""
+$(MMI.doc_header(LinearSVC))
+
+$DOC_ALGORITHM_LINEAR
+
+This model type is similar to `SVC` from the same package with the setting
+`kernel=LIBSVM.Kernel.KERNEL.Linear`, but is optimized for the linear
+case.
+
+
+# Training data
+
+In MLJ or MLJBase, bind an instance `model` to data with one of:
+
+    mach = machine(model, X, y)
+    mach = machine(model, X, y, w)
+
+where
+
+- `X`: any table of input features (eg, a `DataFrame`) whose columns
+  each have `Continuous` element scitype; check column scitypes with
+  `schema(X)`
+
+- `y`: is the target, which can be any `AbstractVector` whose element
+  scitype is `<:OrderedFactor` or `<:Multiclass`; check the scitype
+  with `scitype(y)`
+
+- `w`: a dictionary of class weights, keyed on `levels(y)`.
+
+Train the machine using `fit!(mach, rows=...)`.
+
+
+# Hyper-parameters
+
+- `solver=LIBSVM.Linearsolver.L2R_L2LOSS_SVC_DUAL`: linear solver,
+  which must be one of the following from the LIBSVM.jl package:
+
+    - `LIBSVM.Linearsolver.L2R_LR`: L2-regularized logistic regression (primal))
+
+    - `LIBSVM.Linearsolver.L2R_L2LOSS_SVC_DUAL`: L2-regularized
+      L2-loss support vector classification (dual)
+
+    - `LIBSVM.Linearsolver.L2R_L2LOSS_SVC`: L2-regularized L2-loss
+      support vector classification (primal)
+
+    - `LIBSVM.Linearsolver.L2R_L1LOSS_SVC_DUAL`: L2-regularized
+      L1-loss support vector classification (dual)
+
+    - `LIBSVM.Linearsolver.MCSVM_CS`: support vector classification by
+      Crammer and Singer) `LIBSVM.Linearsolver.L1R_L2LOSS_SVC`:
+      L1-regularized L2-loss support vector classification)
+
+    - `LIBSVM.Linearsolver.L1R_LR`:  L1-regularized logistic regression
+
+    - `LIBSVM.Linearsolver.L2R_LR_DUAL`: L2-regularized logistic regression (dual)
+
+- `tolerance::Float64=Inf`: tolerance for the stopping criterion;
+
+- `cost=1.0` (range (0, `Inf`)): the parameter denoted ``C`` in the
+  cited reference; for greater regularization, decrease `cost`
+
+- `bias= -1.0`: if `bias >= 0`, instance `x` becomes `[x; bias]`; if
+  `bias < 0`, no bias term added (default -1)
+
+
+# Operations
+
+- `predict(mach, Xnew)`: return predictions of the target given
+  features `Xnew` having the same scitype as `X` above.
+
+
+# Fitted parameters
+
+The fields of `fitted_params(mach)` are:
+
+- `libsvm_model`: the trained model object created by the LIBSVM.jl package
+
+- `encoding`: class encoding used internally by `libsvm_model` - a
+  dictionary of class labels keyed on the internal integer representation
+
+
+# Examples
+
+```
+using MLJ
+import LIBSVM
+
+LinearSVC = @load LinearSVC pkg=LIBSVM               # model type
+model = LinearSVC(solver=LIBSVM.Linearsolver.L2R_LR) # instance
+
+X, y = @load_iris # table, vector
+mach = machine(model, X, y) |> fit!
+
+Xnew = (sepal_length = [6.4, 7.2, 7.4],
+        sepal_width = [2.8, 3.0, 2.8],
+        petal_length = [5.6, 5.8, 6.1],
+        petal_width = [2.1, 1.6, 1.9],)
+
+julia> yhat = predict(mach, Xnew)
+3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
+ "virginica"
+ "versicolor"
+ "virginica"
+```
+
+## Incorporating class weights
+
+```julia
+weights = Dict("virginica" => 1, "versicolor" => 20, "setosa" => 1)
+mach = machine(model, X, y, weights) |> fit!
+
+julia> yhat = predict(mach, Xnew)
+3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
+ "versicolor"
+ "versicolor"
+ "versicolor"
+```
+
+
+See also the [`SVC`](@ref) classifier, and
+  [LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
+  [documentation](https://github.com/cjlin1/liblinear/blob/master/README)
+  for the original C implementation.
+
+"""
+LinearSVC
+
+"""
+$(MMI.doc_header(SVC))
+
+$DOC_ALGORITHM
+
+
+# Training data
+
+In MLJ or MLJBase, bind an instance `model` to data with one of:
+
+    mach = machine(model, X, y)
+    mach = machine(model, X, y, w)
+
+where
+
+- `X`: any table of input features (eg, a `DataFrame`) whose columns
+  each have `Continuous` element scitype; check column scitypes with
+  `schema(X)`
+
+- `y`: is the target, which can be any `AbstractVector` whose element
+  scitype is `<:OrderedFactor` or `<:Multiclass`; check the scitype
+  with `scitype(y)`
+
+- `w`: a dictionary of class weights, keyed on `levels(y)`.
+
+Train the machine using `fit!(mach, rows=...)`.
+
+
+# Hyper-parameters
+
+- `kernel=LIBSVM.Kernel.RadialBasis`: either an object that can be
+  called, as in `kernel(x1, x2)` (where `x1` and `x2` are vectors whose
+  length matches the number of columns of the training data `X`, see
+  examples below) or one of the following built-in kernels from the
+  LIBSVM package:
+
+  - `LIBSVM.Kernel.Linear`: `x1'*x2`
+
+  - `LIBSVM.Kernel.Polynomial`: `gamma*x1'*x2 + coef0)^degree`
+
+  - `LIBSVM.Kernel.RadialBasis`: `exp(-gamma*norm(x1, x2)^2)`
+
+  - `LIBSVM.Kernel.Sigmoid`: `tanh(gamma*x1'*x2 + coef0)`
+
+- `gamma = 0.0`: kernel parameter (see above); if `gamma==-1.0` then
+  `gamma = 1/nfeatures` is used in training, where `nfeatures` is the
+  number of features (columns of `X`).  If `gamma==0.0` then `gamma =
+  1/(var(Tables.matrix(X))*nfeatures)` is used. Actual value used
+  appears in the report (see below).
+
+- `coef0 = 0.0`: kernel parameter (see above)
+
+- `degree::Int32 = Int32(3)`: degree in polynomial kernel (see above)
+
+- `cost=1.0` (range (0, `Inf`)): the parameter denoted ``C`` in the
+  cited reference; for greater regularization, decrease `cost`
+
+- `cachesize=200.0` cache memory size in MB
+
+- `tolerance=0.001`: tolerance for the stopping criterion
+
+- `shrinking=true`: whether to use shrinking heuristics
+
+- `probability=false`: whether to base classification on calibrated
+  probabilities (expensive) or to use the raw decision function
+  (recommended). Note that in either case `predict` returns point
+  predictions and not probabilities, so that this option has little
+  utility in the current re-implementation.
+
+
+# Operations
+
+- `predict(mach, Xnew)`: return predictions of the target given
+  features `Xnew` having the same scitype as `X` above.
+
+
+# Fitted parameters
+
+The fields of `fitted_params(mach)` are:
+
+- `libsvm_model`: the trained model object created by the LIBSVM.jl package
+
+- `encoding`: class encoding used internally by `libsvm_model` - a
+  dictionary of class labels keyed on the internal integer representation
+
+
+# Report
+
+The fields of `report(mach)` are:
+
+- `gamma`: actual value of the kernel parameter `gamma` used in training
+
+
+# Examples
+
+## Using a built-in kernel
+
+```
+using MLJ
+import LIBSVM
+
+SVC = @load SVC pkg=LIBSVM               # model type
+model = SVC(kernel=LIBSVM.Kernel.Polynomial) # instance
+
+X, y = @load_iris # table, vector
+mach = machine(model, X, y) |> fit!
+
+Xnew = (sepal_length = [6.4, 7.2, 7.4],
+        sepal_width = [2.8, 3.0, 2.8],
+        petal_length = [5.6, 5.8, 6.1],
+        petal_width = [2.1, 1.6, 1.9],)
+
+julia> yhat = predict(mach, Xnew)
+3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
+ "virginica"
+ "virginica"
+ "virginica"
+```
+
+## Using a user-defined kernel
+
+```
+k(x1, x2) = x1'*x2 # equivalent to `LIBSVM.Kernel.Linear`
+model = SVC(kernel=k)
+mach = machine(model, X, y) |> fit!
+
+Xnew = (sepal_length = [6.4, 7.2, 7.4],
+        sepal_width = [2.8, 3.0, 2.8],
+        petal_length = [5.6, 5.8, 6.1],
+        petal_width = [2.1, 1.6, 1.9],)
+
+julia> yhat = predict(mach, Xnew)
+3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
+ "virginica"
+ "virginica"
+ "virginica"
+```
+
+## Incorporating class weights
+
+In either scenario above, we can do:
+
+```julia
+weights = Dict("virginica" => 1, "versicolor" => 20, "setosa" => 1)
+mach = machine(model, X, y, weights) |> fit!
+
+julia> yhat = predict(mach, Xnew)
+3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
+ "versicolor"
+ "versicolor"
+ "versicolor"
+```
+
+See also the classifiers [`NuSVC`](@ref) and [`LinearSVC`](@ref), and
+[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
+[documentation](https://github.com/cjlin1/libsvm/blob/master/README)
+for the original C implementation.
+
+"""
+SVC
+
+"""
+$(MMI.doc_header(SVC))
+
+$DOC_ALGORITHM
+
+This model is simply a reparameterization of the [`SVC`](@ref)
+classifier, where `nu` replaces `cost`, and is therefore mathematically
+equivalent to it.
+
+# Training data
+
+In MLJ or MLJBase, bind an instance `model` to data with one of:
+
+    mach = machine(model, X, y)
+
+where
+
+- `X`: any table of input features (eg, a `DataFrame`) whose columns
+  each have `Continuous` element scitype; check column scitypes with
+  `schema(X)`
+
+- `y`: is the target, which can be any `AbstractVector` whose element
+  scitype is `<:OrderedFactor` or `<:Multiclass`; check the scitype
+  with `scitype(y)`
+
+Train the machine using `fit!(mach, rows=...)`.
+
+
+# Hyper-parameters
+
+- `kernel=LIBSVM.Kernel.RadialBasis`: either an object that can be
+  called, as in `kernel(x1, x2)` (where `x1` and `x2` are vectors whose
+  length matches the number of columns of the training data `X`, see
+  examples below) or one of the following built-in kernels from the
+  LIBSVM package:
+
+  - `LIBSVM.Kernel.Linear`: `x1'*x2`
+
+  - `LIBSVM.Kernel.Polynomial`: `gamma*x1'*x2 + coef0)^degree`
+
+  - `LIBSVM.Kernel.RadialBasis`: `exp(-gamma*norm(x1, x2)^2)`
+
+  - `LIBSVM.Kernel.Sigmoid`: `tanh(gamma*x1'*x2 + coef0)`
+
+- `gamma = 0.0`: kernel parameter (see above); if `gamma==-1.0` then
+  `gamma = 1/nfeatures` is used in training, where `nfeatures` is the
+  number of features (columns of `X`).  If `gamma==0.0` then `gamma =
+  1/(var(Tables.matrix(X))*nfeatures)` is used. Actual value used
+  appears in the report (see below).
+
+- `coef0 = 0.0`: kernel parameter (see above)
+
+- `degree::Int32 = Int32(3)`: degree in polynomial kernel (see above)
+
+- `nu=0.5` (range (0, 1]): An upper bound on the fraction of margin
+  errors and a lower bound of the fraction of support vectors. Denoted
+  `ν` in the cited paper.
+
+- `cachesize=200.0` cache memory size in MB
+
+- `tolerance=0.001`: tolerance for the stopping criterion
+
+- `shrinking=true`: whether to use shrinking heuristics
+
+
+# Operations
+
+- `predict(mach, Xnew)`: return predictions of the target given
+  features `Xnew` having the same scitype as `X` above.
+
+
+# Fitted parameters
+
+The fields of `fitted_params(mach)` are:
+
+- `libsvm_model`: the trained model object created by the LIBSVM.jl package
+
+- `encoding`: class encoding used internally by `libsvm_model` - a
+  dictionary of class labels keyed on the internal integer representation
+
+
+# Report
+
+The fields of `report(mach)` are:
+
+- `gamma`: actual value of the kernel parameter `gamma` used in training
+
+
+# Examples
+
+## Using a built-in kernel
+
+```
+using MLJ
+import LIBSVM
+
+SVC = @load NuSVC pkg=LIBSVM               # model type
+model = NuSVC(kernel=LIBSVM.Kernel.Polynomial) # instance
+
+X, y = @load_iris # table, vector
+mach = machine(model, X, y) |> fit!
+
+Xnew = (sepal_length = [6.4, 7.2, 7.4],
+        sepal_width = [2.8, 3.0, 2.8],
+        petal_length = [5.6, 5.8, 6.1],
+        petal_width = [2.1, 1.6, 1.9],)
+
+julia> yhat = predict(mach, Xnew)
+3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
+ "virginica"
+ "virginica"
+ "virginica"
+```
+
+## Using a user-defined kernel
+
+```
+k(x1, x2) = x1'*x2 # equivalent to `LIBSVM.Kernel.Linear`
+model = NuSVC(kernel=k)
+mach = machine(model, X, y) |> fit!
+
+Xnew = (sepal_length = [6.4, 7.2, 7.4],
+        sepal_width = [2.8, 3.0, 2.8],
+        petal_length = [5.6, 5.8, 6.1],
+        petal_width = [2.1, 1.6, 1.9],)
+
+julia> yhat = predict(mach, Xnew)
+3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
+ "virginica"
+ "virginica"
+ "virginica"
+```
+
+## Incorporating class weights
+
+In either scenario above, we can do:
+
+```julia
+weights = Dict("virginica" => 1, "versicolor" => 20, "setosa" => 1)
+mach = machine(model, X, y, weights) |> fit!
+
+julia> yhat = predict(mach, Xnew)
+3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
+ "versicolor"
+ "versicolor"
+ "versicolor"
+```
+
+See also the classifiers [`NuSVC`](@ref) and [`LinearSVC`](@ref),
+  [LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
+  [documentation](https://github.com/cjlin1/libsvm/blob/master/README)
+  for the original C implementation.
+
+"""
+NuSVC
+
 
 end # module
