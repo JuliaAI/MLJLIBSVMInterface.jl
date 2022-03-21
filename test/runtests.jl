@@ -164,9 +164,8 @@ yhat₂ = MLJBase.predict(model₂, fitresult₂, X);
 
 @test accuracy(yhat, y) > 0.75
 
-model = @test_logs((:warn, MLJLIBSVMInterface.WARN_PRECOMPUTED_KERNEL),
+model = @test_throws(MLJLIBSVMInterface.ERR_PRECOMPUTED_KERNEL,
                    SVC(kernel=LIBSVM.Kernel.Precomputed))
-@test model.kernel == LIBSVM.Kernel.RadialBasis
 
 
 ## WEIGHTS
@@ -188,24 +187,24 @@ for model in [SVC(), LinearSVC()]
 
     # without weights:
     Θ, _, _ = MLJBase.fit(model, 0, Xtrain, ytrain)
-    yhat = predict(model, Θ, X);
-    @test levels(yhat) == levels(y) # the `2` class persists as a level
+    ŷ = predict(model, Θ, X);
+    @test levels(ŷ) == levels(y) # the `2` class persists as a level
 
     # with uniform weights:
     Θ_uniform, _, _ = MLJBase.fit(model, 0, Xtrain, ytrain, weights_uniform)
-    yhat_uniform = predict(model, Θ_uniform, X);
-    @test levels(yhat_uniform) == levels(y)
+    ŷ_uniform = predict(model, Θ_uniform, X);
+    @test levels(ŷ_uniform) == levels(y)
 
     # with weights favouring class `3`:
     Θ_favouring_3, _, _ = MLJBase.fit(model, 0, Xtrain, ytrain, weights_favouring_3)
-    yhat_favouring_3 = predict(model, Θ_favouring_3, X);
-    @test levels(yhat_favouring_3) == levels(y)
+    ŷ_favouring_3 = predict(model, Θ_favouring_3, X);
+    @test levels(ŷ_favouring_3) == levels(y)
 
     # comparisons:
     if !(model isa LinearSVC) # linear solver is not deterministic
-        @test yhat_uniform == yhat
+        @test ŷ_uniform == ŷ
     end
-    d = sum(yhat_favouring_3 .== 3) - sum(yhat .== 3)
+    d = sum(ŷ_favouring_3 .== 3) - sum(ŷ .== 3)
     if d <= 0
         @show model
         @show d

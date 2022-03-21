@@ -44,17 +44,6 @@ function LinearSVC(
     return model
 end
 
-"""
-    SVC(; kwargs...)
-
-Kernel support vector machine classifier using LIBSVM: https://www.csie.ntu.edu.tw/~cjlin/libsvm/
-If `gamma==-1.0` then  `gamma = 1/nfeatures is used in
-fitting.
-If `gamma==0.0` then a `gamma = 1/(var(X) * nfeatures)` is
-used in fitting
-
-See also LinearSVC, NuSVC
-"""
 mutable struct SVC <: MMI.Deterministic
     kernel
     gamma::Float64
@@ -112,7 +101,6 @@ mutable struct NuSVC <: MMI.Deterministic
     kernel
     gamma::Float64
     nu::Float64
-    cost::Float64
     cachesize::Float64
     degree::Int32
     coef0::Float64
@@ -124,7 +112,6 @@ function NuSVC(
     ;kernel = LIBSVM.Kernel.RadialBasis
     ,gamma::Float64 = 0.0
     ,nu::Float64 = 0.5
-    ,cost::Float64 = 1.0
     ,cachesize::Float64 = 200.0
     ,degree::Int32 = Int32(3)
     ,coef0::Float64 = 0.
@@ -135,7 +122,6 @@ function NuSVC(
         kernel
         ,gamma
         ,nu
-        ,cost
         ,cachesize
         ,degree
         ,coef0
@@ -377,10 +363,12 @@ function categorical_value(x, v)
     return pool[get(pool, x)]
 end
 
-# to ensure the keys of user-provided weights are `CategoricalValue`s:
-fix_keys(weights::Dict{<:CategoricalArrays.CategoricalValue}, y) = weights
+# to ensure the keys of user-provided weights are `CategoricalValue`s,
+# and the values are floats:
+fix_keys(weights::Dict{<:CategoricalArrays.CategoricalValue}, y) =
+    Dict(k => float(weights[k]) for k in keys(weights))
 fix_keys(weights, y) =
-    Dict(categorical_value(x, y) => weights[x] for x in keys(weights))
+    Dict(categorical_value(x, y) => float(weights[x]) for x in keys(weights))
 
 """
     encode(weights::Dict, y)
@@ -425,13 +413,13 @@ function MMI.fit(model::LinearSVC, verbosity::Int, X, y, weights=nothing)
 
     result = LIBSVM.LIBLINEAR.linear_train(y_plain, Xmatrix,
         weights = _weights, solver_type = Int32(model.solver),
-        C = model.cost, p = model.p, bias = model.bias,
+        C = model.cost, bias = model.bias,
         eps = model.tolerance, verbose = ifelse(verbosity > 1, true, false)
     )
 
     fitresult = (result, decode)
     cache = nothing
-    report = nothing
+    report = NamedTuple()
 
     return fitresult, cache, report
 end
@@ -522,13 +510,13 @@ MMI.fitted_params(::OneClassSVM, fitresult) =
 
 function MMI.predict(model::LinearSVC, fitresult, Xnew)
     result, decode = fitresult
-    (p,d) = LIBSVM.LIBLINEAR.linear_predict(result, MMI.matrix(Xnew)')
+    p, _ = LIBSVM.LIBLINEAR.linear_predict(result, MMI.matrix(Xnew)')
     return decode(p)
 end
 
 function MMI.predict(model::Union{SVC, NuSVC}, fitresult, Xnew)
     result, decode = fitresult
-    (p,d) = LIBSVM.svmpredict(result, MMI.matrix(Xnew)')
+    p, _ = LIBSVM.svmpredict(result, MMI.matrix(Xnew)')
     return decode(p)
 end
 
