@@ -164,18 +164,6 @@ function OneClassSVM(
     return model
 end
 
-"""
-    NuSVR(; kwargs...)
-
-Kernel support vector machine regressor using LIBSVM: https://www.csie.ntu.edu.tw/~cjlin/libsvm/
-
-If `gamma==-1.0` then  `gamma = 1/nfeatures is used in
-fitting.
-If `gamma==0.0` then a `gamma = 1/(var(X) * nfeatures)` is
-used in fitting
-
-See also EpsilonSVR
-"""
 mutable struct NuSVR <: MMI.Deterministic
     kernel
     gamma::Float64
@@ -217,18 +205,6 @@ function NuSVR(
     return model
 end
 
-"""
-    EpsilonSVR(; kwargs...)
-
-Kernel support vector machine regressor using LIBSVM: https://www.csie.ntu.edu.tw/~cjlin/libsvm/
-
-If `gamma==-1.0` then  `gamma = 1/nfeatures is used in
-fitting.
-If `gamma==0.0` then a `gamma = 1/(var(X) * nfeatures)` is
-used in fitting
-
-See also NuSVR
-"""
 mutable struct EpsilonSVR <: MMI.Deterministic
     kernel
     gamma::Float64
@@ -567,6 +543,24 @@ const DOC_REFERENCE_LINEAR = "Rong-En Fan et al (2008): \"LIBLINEAR: A Library f
 const DOC_ALGORITHM_LINEAR = "Reference for algorithm and core C-library: "*
     "$DOC_REFERENCE_LINEAR. "
 
+const DOC_KERNEL = """
+- `kernel=LIBSVM.Kernel.RadialBasis`: either an object that can be
+  called, as in `kernel(x1, x2)` (where `x1` and `x2` are vectors
+  whose length matches the number of columns of the training data `X`,
+  see examples below) or one of the following built-in kernels from
+  the LIBSVM package:
+
+  - `LIBSVM.Kernel.Linear`: `(x1, x2) -> x1'*x2`
+
+  - `LIBSVM.Kernel.Polynomial`: `(x1, x2) -> gamma*x1'*x2 + coef0)^degree`
+
+  - `LIBSVM.Kernel.RadialBasis`: `(x1, x2) -> (exp(-gamma*norm(x1, x2)^2)`
+
+  - `LIBSVM.Kernel.Sigmoid`: `(x1, x2) - > tanh(gamma*x1'*x2 + coef0)`
+
+  where `gamma`, `coef0`, `degree` are other hyper-parameters.
+"""
+
 
 """
 $(MMI.doc_header(LinearSVC))
@@ -725,19 +719,7 @@ Train the machine using `fit!(mach, rows=...)`.
 
 # Hyper-parameters
 
-- `kernel=LIBSVM.Kernel.RadialBasis`: either an object that can be
-  called, as in `kernel(x1, x2)` (where `x1` and `x2` are vectors whose
-  length matches the number of columns of the training data `X`, see
-  examples below) or one of the following built-in kernels from the
-  LIBSVM package:
-
-  - `LIBSVM.Kernel.Linear`: `x1'*x2`
-
-  - `LIBSVM.Kernel.Polynomial`: `gamma*x1'*x2 + coef0)^degree`
-
-  - `LIBSVM.Kernel.RadialBasis`: `exp(-gamma*norm(x1, x2)^2)`
-
-  - `LIBSVM.Kernel.Sigmoid`: `tanh(gamma*x1'*x2 + coef0)`
+$DOC_KERNEL
 
 - `gamma = 0.0`: kernel parameter (see above); if `gamma==-1.0` then
   `gamma = 1/nfeatures` is used in training, where `nfeatures` is the
@@ -882,11 +864,7 @@ Train the machine using `fit!(mach, rows=...)`.
 
 # Hyper-parameters
 
-- `kernel=LIBSVM.Kernel.RadialBasis`: either an object that can be
-  called, as in `kernel(x1, x2)` (where `x1` and `x2` are vectors whose
-  length matches the number of columns of the training data `X`, see
-  examples below) or one of the following built-in kernels from the
-  LIBSVM package:
+$DOC_KERNEL
 
   - `LIBSVM.Kernel.Linear`: `x1'*x2`
 
@@ -1034,11 +1012,7 @@ Train the machine using `fit!(mach, rows=...)`.
 
 # Hyper-parameters
 
-- `kernel=LIBSVM.Kernel.RadialBasis`: either an object that can be
-  called, as in `kernel(x1, x2)` (where `x1` and `x2` are vectors whose
-  length matches the number of columns of the training data `X`, see
-  examples below) or one of the following built-in kernels from the
-  LIBSVM package:
+$DOC_KERNEL
 
   - `LIBSVM.Kernel.Linear`: `x1'*x2`
 
@@ -1061,7 +1035,7 @@ Train the machine using `fit!(mach, rows=...)`.
 - `cost=1.0` (range (0, `Inf`)): the parameter denoted ``C`` in the
   cited reference; for greater regularization, decrease `cost`
 
-- `epsilon=0.1` (range (, `Inf`)): the parameter denoted ``ϵ`` in the
+- `epsilon=0.1` (range (0, `Inf`)): the parameter denoted ``ϵ`` in the
   cited reference; `epsilon` is the thickness of the "penalty-free"
   neighborhood of the decision surface.
 
@@ -1136,5 +1110,127 @@ for the original C implementation.
 
 """
 EpsilonSVR
+
+"""
+$(MMI.doc_header(NuSVR))
+
+$DOC_ALGORITHM
+
+This model is a reparameterization of `EpsilonSCV` in which the
+`epsilon` hyper-parameter is replaced with a new parameter `nu`
+(denoted ``ν`` in the cited reference) which attempts to control the
+number of support vectors directly.
+
+
+# Training data
+
+In MLJ or MLJBase, bind an instance `model` to data with:
+
+    mach = machine(model, X, y)
+
+where
+
+- `X`: any table of input features (eg, a `DataFrame`) whose columns
+  each have `Continuous` element scitype; check column scitypes with
+  `schema(X)`
+
+- `y`: is the target, which can be any `AbstractVector` whose element
+  scitype is `Continuous`; check the scitype with `scitype(y)`
+
+Train the machine using `fit!(mach, rows=...)`.
+
+
+# Hyper-parameters
+
+- $DOC_KERNEL
+
+- `gamma = 0.0`: kernel parameter (see above); if `gamma==-1.0` then
+  `gamma = 1/nfeatures` is used in training, where `nfeatures` is the
+  number of features (columns of `X`).  If `gamma==0.0` then `gamma =
+  1/(var(Tables.matrix(X))*nfeatures)` is used. Actual value used
+  appears in the report (see below).
+
+- `coef0 = 0.0`: kernel parameter (see above)
+
+- `degree::Int32 = Int32(3)`: degree in polynomial kernel (see above)
+
+- `cost=1.0` (range (0, `Inf`)): the parameter denoted ``C`` in the
+  cited reference; for greater regularization, decrease `cost`
+
+- `nu=0.5` (range (0, 1]): An upper bound on the fraction of margin
+  errors and a lower bound of the fraction of support vectors. Denoted
+  ``ν`` in the cited paper.
+
+- `cachesize=200.0` cache memory size in MB
+
+- `tolerance=0.001`: tolerance for the stopping criterion
+
+- `shrinking=true`: whether to use shrinking heuristics
+
+
+# Operations
+
+- `predict(mach, Xnew)`: return predictions of the target given
+  features `Xnew` having the same scitype as `X` above.
+
+
+# Fitted parameters
+
+The fields of `fitted_params(mach)` are:
+
+- `libsvm_model`: the trained model object created by the LIBSVM.jl package
+
+
+# Report
+
+The fields of `report(mach)` are:
+
+- `gamma`: actual value of the kernel parameter `gamma` used in training
+
+
+# Examples
+
+## Using a built-in kernel
+
+```
+using MLJ
+import LIBSVM
+
+NuSVR = @load NuSVR pkg=LIBSVM            # model type
+model = NuSVR(kernel=LIBSVM.Kernel.Polynomial) # instance
+
+X, y = make_regression(rng=123) # table, vector
+mach = machine(model, X, y) |> fit!
+
+Xnew, _ = make_regression(3, rng=123)
+
+julia> yhat = predict(mach, Xnew)
+3-element Vector{Float64}:
+  0.2008156459920009
+  0.1131520519131709
+ -0.2076156254934889
+```
+
+## Using a user-defined kernel
+
+```
+k(x1, x2) = x1'*x2 # equivalent to `LIBSVM.Kernel.Linear`
+model = NuSVR(kernel=k)
+mach = machine(model, X, y) |> fit!
+
+julia> yhat = predict(mach, Xnew)
+3-element Vector{Float64}:
+  1.1211558175964662
+  0.06677125944808422
+ -0.6817578942749346
+```
+
+See also [`EpsilonSVR`](@ref),
+[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
+[documentation](https://github.com/cjlin1/libsvm/blob/master/README)
+for the original C implementation.
+
+"""
+NuSVR
 
 end # module
