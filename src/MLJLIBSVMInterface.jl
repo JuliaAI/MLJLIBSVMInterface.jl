@@ -85,18 +85,6 @@ function SVC(
     return model
 end
 
-"""
-    NuSVC(; kwargs...)
-
-Kernel support vector machine classifier using LIBSVM: https://www.csie.ntu.edu.tw/~cjlin/libsvm/
-
-If `gamma==-1.0` then  `gamma = 1/nfeatures is used in
-fitting.
-If `gamma==0.0` then a `gamma = 1/(var(X) * nfeatures)` is
-used in fitting
-
-See also LinearSVC, SVC
-"""
 mutable struct NuSVC <: MMI.Deterministic
     kernel
     gamma::Float64
@@ -699,10 +687,10 @@ julia> yhat = predict(mach, Xnew)
 ```
 
 
-See also the [`SVC`](@ref) classifier, and
-  [LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
-  [documentation](https://github.com/cjlin1/liblinear/blob/master/README)
-  for the original C implementation.
+See also the [`SVC`](@ref) and [`NuSVC`] classifiers, and
+[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
+[documentation](https://github.com/cjlin1/liblinear/blob/master/README)
+for the original C implementation.
 
 """
 LinearSVC
@@ -833,11 +821,6 @@ k(x1, x2) = x1'*x2 # equivalent to `LIBSVM.Kernel.Linear`
 model = SVC(kernel=k)
 mach = machine(model, X, y) |> fit!
 
-Xnew = (sepal_length = [6.4, 7.2, 7.4],
-        sepal_width = [2.8, 3.0, 2.8],
-        petal_length = [5.6, 5.8, 6.1],
-        petal_width = [2.1, 1.6, 1.9],)
-
 julia> yhat = predict(mach, Xnew)
 3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
  "virginica"
@@ -869,7 +852,7 @@ for the original C implementation.
 SVC
 
 """
-$(MMI.doc_header(SVC))
+$(MMI.doc_header(NuSVC))
 
 $DOC_ALGORITHM
 
@@ -877,9 +860,10 @@ This model is simply a reparameterization of the [`SVC`](@ref)
 classifier, where `nu` replaces `cost`, and is therefore mathematically
 equivalent to it.
 
+
 # Training data
 
-In MLJ or MLJBase, bind an instance `model` to data with one of:
+In MLJ or MLJBase, bind an instance `model` to data with:
 
     mach = machine(model, X, y)
 
@@ -964,7 +948,7 @@ The fields of `report(mach)` are:
 using MLJ
 import LIBSVM
 
-SVC = @load NuSVC pkg=LIBSVM               # model type
+NuSVC = @load NuSVC pkg=LIBSVM               # model type
 model = NuSVC(kernel=LIBSVM.Kernel.Polynomial) # instance
 
 X, y = @load_iris # table, vector
@@ -989,11 +973,6 @@ k(x1, x2) = x1'*x2 # equivalent to `LIBSVM.Kernel.Linear`
 model = NuSVC(kernel=k)
 mach = machine(model, X, y) |> fit!
 
-Xnew = (sepal_length = [6.4, 7.2, 7.4],
-        sepal_width = [2.8, 3.0, 2.8],
-        petal_length = [5.6, 5.8, 6.1],
-        petal_width = [2.1, 1.6, 1.9],)
-
 julia> yhat = predict(mach, Xnew)
 3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
  "virginica"
@@ -1016,13 +995,146 @@ julia> yhat = predict(mach, Xnew)
  "versicolor"
 ```
 
-See also the classifiers [`NuSVC`](@ref) and [`LinearSVC`](@ref),
-  [LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
-  [documentation](https://github.com/cjlin1/libsvm/blob/master/README)
-  for the original C implementation.
+See also the classifiers [`SVC`](@ref) and [`LinearSVC`](@ref),
+[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
+[documentation](https://github.com/cjlin1/libsvm/blob/master/README)
+for the original C implementation.
 
 """
 NuSVC
 
+
+"""
+$(MMI.doc_header(EpsilonSVR))
+
+$DOC_ALGORITHM
+
+This model is an adaptation of the classifier `SVC` to regression, but
+has an additional parameter `epsilon` (denoted `ϵ` in the cited
+reference).
+
+
+# Training data
+
+In MLJ or MLJBase, bind an instance `model` to data with:
+
+    mach = machine(model, X, y)
+
+where
+
+- `X`: any table of input features (eg, a `DataFrame`) whose columns
+  each have `Continuous` element scitype; check column scitypes with
+  `schema(X)`
+
+- `y`: is the target, which can be any `AbstractVector` whose element
+  scitype is `Continuous`; check the scitype with `scitype(y)`
+
+Train the machine using `fit!(mach, rows=...)`.
+
+
+# Hyper-parameters
+
+- `kernel=LIBSVM.Kernel.RadialBasis`: either an object that can be
+  called, as in `kernel(x1, x2)` (where `x1` and `x2` are vectors whose
+  length matches the number of columns of the training data `X`, see
+  examples below) or one of the following built-in kernels from the
+  LIBSVM package:
+
+  - `LIBSVM.Kernel.Linear`: `x1'*x2`
+
+  - `LIBSVM.Kernel.Polynomial`: `gamma*x1'*x2 + coef0)^degree`
+
+  - `LIBSVM.Kernel.RadialBasis`: `exp(-gamma*norm(x1, x2)^2)`
+
+  - `LIBSVM.Kernel.Sigmoid`: `tanh(gamma*x1'*x2 + coef0)`
+
+- `gamma = 0.0`: kernel parameter (see above); if `gamma==-1.0` then
+  `gamma = 1/nfeatures` is used in training, where `nfeatures` is the
+  number of features (columns of `X`).  If `gamma==0.0` then `gamma =
+  1/(var(Tables.matrix(X))*nfeatures)` is used. Actual value used
+  appears in the report (see below).
+
+- `coef0 = 0.0`: kernel parameter (see above)
+
+- `degree::Int32 = Int32(3)`: degree in polynomial kernel (see above)
+
+- `cost=1.0` (range (0, `Inf`)): the parameter denoted ``C`` in the
+  cited reference; for greater regularization, decrease `cost`
+
+- `epsilon=0.1` (range (, `Inf`)): the parameter denoted ``ϵ`` in the
+  cited reference; `epsilon` is the thickness of the "penalty-free"
+  neighborhood of the decision surface.
+
+- `cachesize=200.0` cache memory size in MB
+
+- `tolerance=0.001`: tolerance for the stopping criterion
+
+- `shrinking=true`: whether to use shrinking heuristics
+
+
+# Operations
+
+- `predict(mach, Xnew)`: return predictions of the target given
+  features `Xnew` having the same scitype as `X` above.
+
+
+# Fitted parameters
+
+The fields of `fitted_params(mach)` are:
+
+- `libsvm_model`: the trained model object created by the LIBSVM.jl package
+
+
+# Report
+
+The fields of `report(mach)` are:
+
+- `gamma`: actual value of the kernel parameter `gamma` used in training
+
+
+# Examples
+
+## Using a built-in kernel
+
+```
+using MLJ
+import LIBSVM
+
+EpsilonSVR = @load EpsilonSVR pkg=LIBSVM            # model type
+model = EpsilonSVR(kernel=LIBSVM.Kernel.Polynomial) # instance
+
+X, y = make_regression(rng=123) # table, vector
+mach = machine(model, X, y) |> fit!
+
+Xnew, _ = make_regression(3, rng=123)
+
+julia> yhat = predict(mach, Xnew)
+3-element Vector{Float64}:
+  0.2512132502584155
+  0.007340201523624579
+ -0.2482949812264707
+```
+
+## Using a user-defined kernel
+
+```
+k(x1, x2) = x1'*x2 # equivalent to `LIBSVM.Kernel.Linear`
+model = EpsilonSVR(kernel=k)
+mach = machine(model, X, y) |> fit!
+
+julia> yhat = predict(mach, Xnew)
+3-element Vector{Float64}:
+  1.1121225361666656
+  0.04667702229741916
+ -0.6958148424680672
+```
+
+See also [`NuSVR`](@ref),
+[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
+[documentation](https://github.com/cjlin1/libsvm/blob/master/README)
+for the original C implementation.
+
+"""
+EpsilonSVR
 
 end # module
