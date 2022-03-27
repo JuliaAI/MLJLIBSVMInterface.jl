@@ -30,6 +30,14 @@ import LIBSVM
                  MLJLIBSVMInterface.encode(Dict('d'=> 1.0), v))
 end
 
+@test "orientation of scores" begin
+    scores = [1, 1, 1, 1, 0]
+    @test MLJLIBSVMInterface.orientation(scores) == -1
+    @test MLJLIBSVMInterface.orientation(-scores) == 1
+    @test MLJLIBSVMInterface.orientation(scores .+ 100) == -1
+    @test MLJLIBSVMInterface.orientation(-scores .+ 100) == 1
+end
+
 
 ## CLASSIFIERS
 

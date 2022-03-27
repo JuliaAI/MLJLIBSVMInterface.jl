@@ -123,11 +123,10 @@ function NuSVC(
     return model
 end
 
-mutable struct OneClassSVM <: MMI.Unsupervised
+mutable struct OneClassSVM <: MMI.UnsupervisedDetector
     kernel
     gamma::Float64
     nu::Float64
-    cost::Float64
     cachesize::Float64
     degree::Int32
     coef0::Float64
@@ -139,7 +138,6 @@ function OneClassSVM(
     ;kernel = LIBSVM.Kernel.RadialBasis
     ,gamma::Float64 = 0.0
     ,nu::Float64 = 0.1
-    ,cost::Float64 = 1.0
     ,cachesize::Float64 = 200.0
     ,degree::Int32 = Int32(3)
     ,coef0::Float64 = 0.0
@@ -150,7 +148,6 @@ function OneClassSVM(
         kernel
         ,gamma
         ,nu
-        ,cost
         ,cachesize
         ,degree
         ,coef0
@@ -361,6 +358,30 @@ function get_encoding(decoder)
 end
 
 
+"""
+    orientation(scores)
+
+Private method.
+
+Return `1` if the majority of elements of `scores` are less than the
+midpoint between the minimum and maximum values. For outlier detection
+scores, the implication in that case is that scores increase with
+increasing likelihood of outlierness.
+
+Otherwise return `-1` (scores decrease with increasing likelihood of
+outlierness).
+
+"""
+function orientation(scores)
+    middle = (maximum(scores) + minimum(scores))/2
+    if quantile(scores, 0.5) < middle
+        return 1
+    else
+        return -1
+    end
+end
+
+
 # # FIT METHOD
 
 function MMI.fit(model::LinearSVC, verbosity::Int, X, y, weights=nothing)
@@ -390,7 +411,6 @@ end
 
 MMI.fitted_params(::LinearSVC, fitresult) =
     (libsvm_model=fitresult[1], encoding=get_encoding(fitresult[2]))
-
 
 function MMI.fit(model::Union{SVC, NuSVC}, verbosity::Int, X, y, weights=nothing)
 
@@ -446,7 +466,6 @@ end
 MMI.fitted_params(::Union{NuSVR, EpsilonSVR}, fitresult) =
     (libsvm_model=fitresult,)
 
-
 function MMI.fit(model::OneClassSVM, verbosity::Int, X)
 
     Xmatrix = MMI.matrix(X)' # notice the transpose
@@ -456,21 +475,29 @@ function MMI.fit(model::OneClassSVM, verbosity::Int, X)
     model = deepcopy(model)
     model.gamma == -1.0 && (model.gamma = 1.0/size(Xmatrix, 1))
     model.gamma == 0.0 && (model.gamma = 1.0/(var(Xmatrix) * size(Xmatrix, 1)) )
-    fitresult = LIBSVM.svmtrain(Xmatrix;
-        get_svm_parameters(model)...,
-        verbose = ifelse(verbosity > 1, true, false)
-    )
+    libsvm_model = LIBSVM.svmtrain(Xmatrix;
+                                   get_svm_parameters(model)...,
+                                   verbose = ifelse(verbosity > 1, true, false)
+                                   )
 
-    report = (gamma=model.gamma,)
+    # get orientation and training scores:
+    p, decision_matrix = LIBSVM.svmpredict(libsvm_model, Xmatrix)
+    decision_scores = view(decision_matrix, 1, :)
+    orientation = MLJLIBSVMInterface.orientation(decision_scores)
+    scores = orientation*decision_scores
+    @show p
+
+    fitresult = (libsvm_model, orientation)
+    report = (gamma=model.gamma, scores=scores)
 
     return fitresult, cache, report
 end
 
 MMI.fitted_params(::OneClassSVM, fitresult) =
-    (libsvm_model=fitresult,)
+    (libsvm_model=fitresult[1], orientation=fitresult[2])
 
 
-# # PREDICT METHODS
+# # PREDICT AND TRANSFORM
 
 function MMI.predict(model::LinearSVC, fitresult, Xnew)
     result, decode = fitresult
@@ -490,9 +517,12 @@ function MMI.predict(model::Union{NuSVR, EpsilonSVR}, fitresult, Xnew)
 end
 
 function MMI.transform(model::OneClassSVM, fitresult, Xnew)
-    (p,d) = LIBSVM.svmpredict(fitresult, MMI.matrix(Xnew)')
-    return MMI.categorical(p)
+    libsvm_model, orientation = fitresult
+    _, decision_matrix = LIBSVM.svmpredict(libsvm_model, MMI.matrix(Xnew)')
+    decision_scores = view(decision_matrix, 1, :)
+    return orientation*decision_scores
 end
+
 
 # metadata
 MMI.load_path(::Type{<:LinearSVC}) = "$PKG.LinearSVC"
@@ -559,8 +589,21 @@ const DOC_KERNEL = """
   - `LIBSVM.Kernel.Sigmoid`: `(x1, x2) - > tanh(gamma*x1'*x2 + coef0)`
 
   where `gamma`, `coef0`, `degree` are other hyper-parameters.
+
+- `gamma = 0.0`: kernel parameter (see above); if `gamma==-1.0` then
+  `gamma = 1/nfeatures` is used in training, where `nfeatures` is the
+  number of features (columns of `X`).  If `gamma==0.0` then `gamma =
+  1/(var(Tables.matrix(X))*nfeatures)` is used. Actual value used
+  appears in the report (see below).
+
+- `coef0 = 0.0`: kernel parameter (see above)
+
+- `degree::Int32 = Int32(3)`: degree in polynomial kernel (see above)
+
 """
 
+
+# ## LinearSVC
 
 """
 $(MMI.doc_header(LinearSVC))
@@ -689,6 +732,9 @@ for the original C implementation.
 """
 LinearSVC
 
+
+# ## SVC
+
 """
 $(MMI.doc_header(SVC))
 
@@ -720,16 +766,6 @@ Train the machine using `fit!(mach, rows=...)`.
 # Hyper-parameters
 
 $DOC_KERNEL
-
-- `gamma = 0.0`: kernel parameter (see above); if `gamma==-1.0` then
-  `gamma = 1/nfeatures` is used in training, where `nfeatures` is the
-  number of features (columns of `X`).  If `gamma==0.0` then `gamma =
-  1/(var(Tables.matrix(X))*nfeatures)` is used. Actual value used
-  appears in the report (see below).
-
-- `coef0 = 0.0`: kernel parameter (see above)
-
-- `degree::Int32 = Int32(3)`: degree in polynomial kernel (see above)
 
 - `cost=1.0` (range (0, `Inf`)): the parameter denoted ``C`` in the
   cited reference; for greater regularization, decrease `cost`
@@ -833,6 +869,9 @@ for the original C implementation.
 """
 SVC
 
+
+# ## NuSVC
+
 """
 $(MMI.doc_header(NuSVC))
 
@@ -865,24 +904,6 @@ Train the machine using `fit!(mach, rows=...)`.
 # Hyper-parameters
 
 $DOC_KERNEL
-
-  - `LIBSVM.Kernel.Linear`: `x1'*x2`
-
-  - `LIBSVM.Kernel.Polynomial`: `gamma*x1'*x2 + coef0)^degree`
-
-  - `LIBSVM.Kernel.RadialBasis`: `exp(-gamma*norm(x1, x2)^2)`
-
-  - `LIBSVM.Kernel.Sigmoid`: `tanh(gamma*x1'*x2 + coef0)`
-
-- `gamma = 0.0`: kernel parameter (see above); if `gamma==-1.0` then
-  `gamma = 1/nfeatures` is used in training, where `nfeatures` is the
-  number of features (columns of `X`).  If `gamma==0.0` then `gamma =
-  1/(var(Tables.matrix(X))*nfeatures)` is used. Actual value used
-  appears in the report (see below).
-
-- `coef0 = 0.0`: kernel parameter (see above)
-
-- `degree::Int32 = Int32(3)`: degree in polynomial kernel (see above)
 
 - `nu=0.5` (range (0, 1]): An upper bound on the fraction of margin
   errors and a lower bound of the fraction of support vectors. Denoted
@@ -982,6 +1003,8 @@ for the original C implementation.
 NuSVC
 
 
+# ## EpsilonSVR
+
 """
 $(MMI.doc_header(EpsilonSVR))
 
@@ -1013,24 +1036,6 @@ Train the machine using `fit!(mach, rows=...)`.
 # Hyper-parameters
 
 $DOC_KERNEL
-
-  - `LIBSVM.Kernel.Linear`: `x1'*x2`
-
-  - `LIBSVM.Kernel.Polynomial`: `gamma*x1'*x2 + coef0)^degree`
-
-  - `LIBSVM.Kernel.RadialBasis`: `exp(-gamma*norm(x1, x2)^2)`
-
-  - `LIBSVM.Kernel.Sigmoid`: `tanh(gamma*x1'*x2 + coef0)`
-
-- `gamma = 0.0`: kernel parameter (see above); if `gamma==-1.0` then
-  `gamma = 1/nfeatures` is used in training, where `nfeatures` is the
-  number of features (columns of `X`).  If `gamma==0.0` then `gamma =
-  1/(var(Tables.matrix(X))*nfeatures)` is used. Actual value used
-  appears in the report (see below).
-
-- `coef0 = 0.0`: kernel parameter (see above)
-
-- `degree::Int32 = Int32(3)`: degree in polynomial kernel (see above)
 
 - `cost=1.0` (range (0, `Inf`)): the parameter denoted ``C`` in the
   cited reference; for greater regularization, decrease `cost`
@@ -1111,6 +1116,9 @@ for the original C implementation.
 """
 EpsilonSVR
 
+
+# ## NuSVR
+
 """
 $(MMI.doc_header(NuSVR))
 
@@ -1143,16 +1151,6 @@ Train the machine using `fit!(mach, rows=...)`.
 # Hyper-parameters
 
 - $DOC_KERNEL
-
-- `gamma = 0.0`: kernel parameter (see above); if `gamma==-1.0` then
-  `gamma = 1/nfeatures` is used in training, where `nfeatures` is the
-  number of features (columns of `X`).  If `gamma==0.0` then `gamma =
-  1/(var(Tables.matrix(X))*nfeatures)` is used. Actual value used
-  appears in the report (see below).
-
-- `coef0 = 0.0`: kernel parameter (see above)
-
-- `degree::Int32 = Int32(3)`: degree in polynomial kernel (see above)
 
 - `cost=1.0` (range (0, `Inf`)): the parameter denoted ``C`` in the
   cited reference; for greater regularization, decrease `cost`
@@ -1232,5 +1230,189 @@ for the original C implementation.
 
 """
 NuSVR
+
+
+# ## OneClassSVM
+
+"""
+$(MMI.doc_header(OneClassSVM))
+
+$DOC_ALGORITHM
+
+This model is an outlier detection model delivering raw scores based
+on the decision function of a support vector machine. Like the
+[`NuSVC`](@ref) classifier, it uses the `nu` reparameterization of the
+`cost` parameter appearing in standard support vector classification
+[`SVC`](@ref).
+
+To extract
+normalized scores ("probabilities") wrap the model using
+`ProbabilisticDetector` from
+[OutlierDection.jl](https://github.com/OutlierDetectionJL/OutlierDetection.jl). For
+threshold-based classification, wrap the probabilistic model using
+MLJ's `BinaryThresholdPredictor`. Examples of wrapping appear below.
+
+
+# Training data
+
+In MLJ or MLJBase, bind an instance `model` to data with:
+
+    mach = machine(model, X, y)
+
+where
+
+- `X`: any table of input features (eg, a `DataFrame`) whose columns
+  each have `Continuous` element scitype; check column scitypes with
+  `schema(X)`
+
+Train the machine using `fit!(mach, rows=...)`.
+
+
+# Hyper-parameters
+
+$DOC_KERNEL
+
+- `nu=0.5` (range (0, 1]): An upper bound on the fraction of margin
+  errors and a lower bound of the fraction of support vectors. Denoted
+  `ν` in the cited paper.
+
+- `cachesize=200.0` cache memory size in MB
+
+- `tolerance=0.001`: tolerance for the stopping criterion
+
+- `shrinking=true`: whether to use shrinking heuristics
+
+
+# Operations
+
+- `transform(mach, Xnew)`: return predictions of the target, given
+  features `Xnew` having the same scitype as `X` above.
+
+
+# Fitted parameters
+
+The fields of `fitted_params(mach)` are:
+
+- `libsvm_model`: the trained model object created by the LIBSVM.jl package
+
+- `orientation`: this equals `1` if the decision function for
+  `libsvm_model` is increasing with increasing outlierness, and `-1`
+  if it is decreasing instead. Correspondingly, the `libsvm_model` attaches
+
+
+# Report
+
+The fields of `report(mach)` are:
+
+- `gamma`: actual value of the kernel parameter `gamma` used in training
+
+
+# Examples
+
+## Generating raw scores for outlierness
+
+
+```
+using MLJ
+import LIBSVM
+import StableRNGs.StableRNG
+
+OneClassSVM = @load OneClassSVM pkg=LIBSVM           # model type
+model = OneClassSVM(kernel=LIBSVM.Kernel.Polynomial) # instance
+
+rng = StableRNG(123)
+Xmatrix = randn(rng, 5, 3)
+Xmatrix[1, 1] = 100.0
+X = MLJ.table(Xmatrix)
+
+mach = machine(model, X) |> fit!
+
+# training scores (outliers have larger scores):
+julia> report(mach).scores
+5-element Vector{Float64}:
+  6.711689156091755e-7
+ -6.740101976655081e-7
+ -6.711632439648446e-7
+ -6.743015858874887e-7
+ -6.745393717880104e-7
+
+# scores for new data:
+Xnew = MLJ.table(rand(rng, 2, 3))
+
+julia> transform(mach, rand(rng, 2, 3))
+2-element Vector{Float64}:
+ -6.746293022511047e-7
+ -6.744289265348623e-7
+```
+
+## Generating probabilistic predictions of outlierness
+
+Continuing the previous example:
+
+```
+using OutlierDetection
+pmodel = ProbabilisticDetector(model)
+pmach = machine(pmodel, X) |> fit!
+
+# probabilistic predictions on new data:
+
+julia> y_prob = predict(pmach, Xnew)
+2-element UnivariateFiniteVector{OrderedFactor{2}, String, UInt8, Float64}:
+ UnivariateFinite{OrderedFactor{2}}(normal=>1.0, outlier=>9.57e-5)
+ UnivariateFinite{OrderedFactor{2}}(normal=>1.0, outlier=>0.0)
+
+# probabilities for outlierness:
+
+julia> pdf.(y_prob, "outlier")
+2-element Vector{Float64}:
+ 9.572583265925801e-5
+ 0.0
+
+
+## Outlier classification using a probability threshold:
+
+Continuing the previous example:
+
+```
+dmodel = BinaryThresholdPredictor(pmodel, threshold=0.9)
+dmach = machine(dmodel, X) |> fit!
+
+## Using a user-defined kernel
+
+
+```
+k(x1, x2) = x1'*x2 # equivalent to `LIBSVM.Kernel.Linear`
+model = OneClassSVM(kernel=k)
+mach = machine(model, X, y) |> fit!
+
+julia> yhat = predict(mach, Xnew)
+3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
+ "virginica"
+ "virginica"
+ "virginica"
+```
+
+## Incorporating class weights
+
+In either scenario above, we can do:
+
+```julia
+weights = Dict("virginica" => 1, "versicolor" => 20, "setosa" => 1)
+mach = machine(model, X, y, weights) |> fit!
+
+julia> yhat = predict(mach, Xnew)
+3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
+ "versicolor"
+ "versicolor"
+ "versicolor"
+```
+
+See also the classifiers [`SVC`](@ref) and [`LinearSVC`](@ref),
+[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
+[documentation](https://github.com/cjlin1/libsvm/blob/master/README)
+for the original C implementation.
+
+"""
+OneClassSVM
 
 end # module
