@@ -485,7 +485,6 @@ function MMI.fit(model::OneClassSVM, verbosity::Int, X)
     decision_scores = view(decision_matrix, 1, :)
     orientation = MLJLIBSVMInterface.orientation(decision_scores)
     scores = orientation*decision_scores
-    @show p
 
     fitresult = (libsvm_model, orientation)
     report = (gamma=model.gamma, scores=scores)
@@ -537,9 +536,9 @@ MMI.supports_class_weights(::Type{<:SVC}) = true
 
 MMI.human_name(::Type{<:LinearSVC}) = "linear support vector classifier"
 MMI.human_name(::Type{<:SVC}) = "C-support vector classifier"
-MMI.human_name(::Type{<:NuSVC}) = "nu-support vector classifier"
-MMI.human_name(::Type{<:NuSVR}) = "nu-support vector regressor"
-MMI.human_name(::Type{<:EpsilonSVR}) = "epsilon-support vector regressor"
+MMI.human_name(::Type{<:NuSVC}) = "ν-support vector classifier"
+MMI.human_name(::Type{<:NuSVR}) = "ν-support vector regressor"
+MMI.human_name(::Type{<:EpsilonSVR}) = "ϵ-support vector regressor"
 MMI.human_name(::Type{<:OneClassSVM}) = "$one-class support vector machine"
 
 MMI.package_name(::Type{<:SVM}) = "LIBSVM"
@@ -575,10 +574,10 @@ const DOC_ALGORITHM_LINEAR = "Reference for algorithm and core C-library: "*
 
 const DOC_KERNEL = """
 - `kernel=LIBSVM.Kernel.RadialBasis`: either an object that can be
-  called, as in `kernel(x1, x2)` (where `x1` and `x2` are vectors
-  whose length matches the number of columns of the training data `X`,
-  see examples below) or one of the following built-in kernels from
-  the LIBSVM package:
+  called, as in `kernel(x1, x2)`, or one of the built-in kernels from
+  the LIBSVM.jl package listed below.  Here `x1` and `x2` are vectors
+  whose lengths match the number of columns of the training data `X`,
+  see examples below.
 
   - `LIBSVM.Kernel.Linear`: `(x1, x2) -> x1'*x2`
 
@@ -588,7 +587,7 @@ const DOC_KERNEL = """
 
   - `LIBSVM.Kernel.Sigmoid`: `(x1, x2) - > tanh(gamma*x1'*x2 + coef0)`
 
-  where `gamma`, `coef0`, `degree` are other hyper-parameters.
+  Here `gamma`, `coef0`, `degree` are other hyper-parameters.
 
 - `gamma = 0.0`: kernel parameter (see above); if `gamma==-1.0` then
   `gamma = 1/nfeatures` is used in training, where `nfeatures` is the
@@ -832,7 +831,7 @@ julia> yhat = predict(mach, Xnew)
  "virginica"
 ```
 
-## Using a user-defined kernel
+## User-defined kernels
 
 ```
 k(x1, x2) = x1'*x2 # equivalent to `LIBSVM.Kernel.Linear`
@@ -877,7 +876,7 @@ $(MMI.doc_header(NuSVC))
 
 $DOC_ALGORITHM
 
-This model is simply a reparameterization of the [`SVC`](@ref)
+This model is simply a re-parameterization of the [`SVC`](@ref)
 classifier, where `nu` replaces `cost`, and is therefore mathematically
 equivalent to it.
 
@@ -965,7 +964,7 @@ julia> yhat = predict(mach, Xnew)
  "virginica"
 ```
 
-## Using a user-defined kernel
+## User-defined kernels
 
 ```
 k(x1, x2) = x1'*x2 # equivalent to `LIBSVM.Kernel.Linear`
@@ -977,21 +976,6 @@ julia> yhat = predict(mach, Xnew)
  "virginica"
  "virginica"
  "virginica"
-```
-
-## Incorporating class weights
-
-In either scenario above, we can do:
-
-```julia
-weights = Dict("virginica" => 1, "versicolor" => 20, "setosa" => 1)
-mach = machine(model, X, y, weights) |> fit!
-
-julia> yhat = predict(mach, Xnew)
-3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
- "versicolor"
- "versicolor"
- "versicolor"
 ```
 
 See also the classifiers [`SVC`](@ref) and [`LinearSVC`](@ref),
@@ -1011,7 +995,7 @@ $(MMI.doc_header(EpsilonSVR))
 $DOC_ALGORITHM
 
 This model is an adaptation of the classifier `SVC` to regression, but
-has an additional parameter `epsilon` (denoted `ϵ` in the cited
+has an additional parameter `epsilon` (denoted ``ϵ`` in the cited
 reference).
 
 
@@ -1094,7 +1078,7 @@ julia> yhat = predict(mach, Xnew)
  -0.2482949812264707
 ```
 
-## Using a user-defined kernel
+## User-defined kernels
 
 ```
 k(x1, x2) = x1'*x2 # equivalent to `LIBSVM.Kernel.Linear`
@@ -1124,7 +1108,7 @@ $(MMI.doc_header(NuSVR))
 
 $DOC_ALGORITHM
 
-This model is a reparameterization of `EpsilonSCV` in which the
+This model is a re-parameterization of `EpsilonSVR` in which the
 `epsilon` hyper-parameter is replaced with a new parameter `nu`
 (denoted ``ν`` in the cited reference) which attempts to control the
 number of support vectors directly.
@@ -1209,7 +1193,7 @@ julia> yhat = predict(mach, Xnew)
  -0.2076156254934889
 ```
 
-## Using a user-defined kernel
+## User-defined kernels
 
 ```
 k(x1, x2) = x1'*x2 # equivalent to `LIBSVM.Kernel.Linear`
@@ -1241,14 +1225,14 @@ $DOC_ALGORITHM
 
 This model is an outlier detection model delivering raw scores based
 on the decision function of a support vector machine. Like the
-[`NuSVC`](@ref) classifier, it uses the `nu` reparameterization of the
+[`NuSVC`](@ref) classifier, it uses the `nu` re-parameterization of the
 `cost` parameter appearing in standard support vector classification
 [`SVC`](@ref).
 
 To extract
 normalized scores ("probabilities") wrap the model using
 `ProbabilisticDetector` from
-[OutlierDection.jl](https://github.com/OutlierDetectionJL/OutlierDetection.jl). For
+[OutlierDetection.jl](https://github.com/OutlierDetectionJL/OutlierDetection.jl). For
 threshold-based classification, wrap the probabilistic model using
 MLJ's `BinaryThresholdPredictor`. Examples of wrapping appear below.
 
@@ -1285,8 +1269,13 @@ $DOC_KERNEL
 
 # Operations
 
-- `transform(mach, Xnew)`: return predictions of the target, given
-  features `Xnew` having the same scitype as `X` above.
+- `transform(mach, Xnew)`: return scores for outlierness, given
+  features `Xnew` having the same scitype as `X` above. The greater
+  the score, the more likely it is an outlier. This score is based on
+  the SVM decision function. For normalized scores, wrap `model` using
+  `ProbabilisticDetector` from OutlierDetection.jl and call `predict`
+  instead, and for threshold-based classification, wrap again using
+  `BinaryThresholdPredictor`. See the examples below.
 
 
 # Fitted parameters
@@ -1297,7 +1286,11 @@ The fields of `fitted_params(mach)` are:
 
 - `orientation`: this equals `1` if the decision function for
   `libsvm_model` is increasing with increasing outlierness, and `-1`
-  if it is decreasing instead. Correspondingly, the `libsvm_model` attaches
+  if it is decreasing instead. Correspondingly, the `libsvm_model`
+  attaches `true` to outliers in the first case, and `false` in the
+  second. (The `scores` given in the MLJ report and generated by
+  `MLJ.transform` already correct for this ambiguity, which is
+  therefore only an issue for users directly accessing `libsvm_model`.)
 
 
 # Report
@@ -1368,6 +1361,14 @@ julia> pdf.(y_prob, "outlier")
  9.572583265925801e-5
  0.0
 
+# raw scores are still available using `transform`:
+
+julia> transform(pmach, Xnew)
+2-element Vector{Float64}:
+ 9.572583265925801e-5
+ 0.0
+```
+
 
 ## Outlier classification using a probability threshold:
 
@@ -1377,40 +1378,32 @@ Continuing the previous example:
 dmodel = BinaryThresholdPredictor(pmodel, threshold=0.9)
 dmach = machine(dmodel, X) |> fit!
 
-## Using a user-defined kernel
+julia> yhat = predict(dmach, Xnew)
+2-element CategoricalArrays.CategoricalArray{String,1,UInt8}:
+ "normal"
+ "normal"
+```
 
+## User-defined kernels
+
+Continuing the first example:
 
 ```
 k(x1, x2) = x1'*x2 # equivalent to `LIBSVM.Kernel.Linear`
 model = OneClassSVM(kernel=k)
-mach = machine(model, X, y) |> fit!
+mach = machine(model, X) |> fit!
 
-julia> yhat = predict(mach, Xnew)
-3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
- "virginica"
- "virginica"
- "virginica"
+julia> yhat = transform(mach, Xnew)
+2-element Vector{Float64}:
+ -0.4825363352732942
+ -0.4848772169720227
 ```
 
-## Incorporating class weights
-
-In either scenario above, we can do:
-
-```julia
-weights = Dict("virginica" => 1, "versicolor" => 20, "setosa" => 1)
-mach = machine(model, X, y, weights) |> fit!
-
-julia> yhat = predict(mach, Xnew)
-3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
- "versicolor"
- "versicolor"
- "versicolor"
-```
-
-See also the classifiers [`SVC`](@ref) and [`LinearSVC`](@ref),
-[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
+See also [LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
 [documentation](https://github.com/cjlin1/libsvm/blob/master/README)
-for the original C implementation.
+for the original C implementation. For an alternative source of
+outlier detection models with an MLJ interface, see
+[OutlierDetection.jl](https://outlierdetectionjl.github.io/OutlierDetection.jl/dev/).
 
 """
 OneClassSVM
