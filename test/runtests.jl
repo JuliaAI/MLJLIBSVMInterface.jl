@@ -30,7 +30,7 @@ import LIBSVM
                  MLJLIBSVMInterface.encode(Dict('d'=> 1.0), v))
 end
 
-@test "orientation of scores" begin
+@testset "orientation of scores" begin
     scores = [1, 1, 1, 1, 0]
     @test MLJLIBSVMInterface.orientation(scores) == -1
     @test MLJLIBSVMInterface.orientation(-scores) == 1
@@ -126,22 +126,36 @@ nurpred = MLJBase.predict(nu_regressor, fitresultRnu, selectrows(X, test));
 
 ## ANOMALY DETECTION
 
+N = 50
+rng = StableRNGs.StableRNG(123)
+Xmatrix = randn(rng, 2N, 3)
+
+# insert outliers at observation 1 and N:
+Xmatrix[1, 1] = 100.0
+Xmatrix[N, 3] = 200.0
+
+X = MLJBase.table(Xmatrix)
+
 oneclasssvm = OneClassSVM()
 
-fitresultoc, cacheoc, reportoc = MLJBase.fit(oneclasssvm, 1,
-                                             selectrows(X, train));
+fitresultoc, cacheoc, reportoc = MLJBase.fit(oneclasssvm, 1, X)
 
 fp = MLJBase.fitted_params(oneclasssvm, fitresultoc)
 @test fp.libsvm_model isa LIBSVM.SVM
 
-# output is CategoricalArray{Bool}
-ocpred = MLJBase.transform(oneclasssvm,
-                           fitresultoc,
-                           selectrows(X, test));
+training_scores = reportoc.scores
+scores = MLJBase.transform(oneclasssvm, fitresultoc, X)
 
-# test whether the proprotion of outliers corresponds to the `nu` parameter
-@test isapprox((length(train) - sum(MLJBase.transform(oneclasssvm, fitresultoc, selectrows(X, train)) .== true)) / length(train), oneclasssvm.nu, atol=0.005)
-@test isapprox((length(test) - sum(ocpred .== true))  / length(test), oneclasssvm.nu, atol=0.05)
+@test scores == training_scores
+
+# crude extraction of outliers from scores:
+midpoint = mean([minimum(scores), maximum(scores)])
+outlier_indices = filter(eachindex(scores)) do i
+    scores[i] .> midpoint
+end
+
+@test outlier_indices == [1, N]
+
 
 ## CONSTRUCTOR FAILS
 
