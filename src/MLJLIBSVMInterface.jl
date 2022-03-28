@@ -481,7 +481,7 @@ function MMI.fit(model::OneClassSVM, verbosity::Int, X)
                                    )
 
     # get orientation and training scores:
-    p, decision_matrix = LIBSVM.svmpredict(libsvm_model, Xmatrix)
+    _, decision_matrix = LIBSVM.svmpredict(libsvm_model, Xmatrix)
     decision_scores = view(decision_matrix, 1, :)
     orientation = MLJLIBSVMInterface.orientation(decision_scores)
     scores = orientation*decision_scores
