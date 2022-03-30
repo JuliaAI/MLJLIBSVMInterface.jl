@@ -564,13 +564,13 @@ const DOC_REFERENCE = "C.-C. Chang and C.-J. Lin (2011): \"LIBSVM: a library for
 
 const DOC_ALGORITHM = "Reference for algorithm and core C-library: $DOC_REFERENCE. "
 
-const DOC_REFERENCE_LINEAR = "Rong-En Fan et al (2008): \"LIBLINEAR: A Library for "*
+const DOC_REFERENCE2 = "Rong-En Fan et al (2008): \"LIBLINEAR: A Library for "*
     "Large Linear Classification.\" *Journal of Machine Learning Research* 9 1871-1874. "*
     "Available at [https://www.csie.ntu.edu.tw/~cjlin/papers/liblinear.pdf]"*
     "(https://www.csie.ntu.edu.tw/~cjlin/papers/liblinear.pdf)"
 
 const DOC_ALGORITHM_LINEAR = "Reference for algorithm and core C-library: "*
-    "$DOC_REFERENCE_LINEAR. "
+    "$DOC_REFERENCE2. "
 
 const DOC_KERNEL = """
 - `kernel=LIBSVM.Kernel.RadialBasis`: either an object that can be
@@ -583,7 +583,7 @@ const DOC_KERNEL = """
 
   - `LIBSVM.Kernel.Polynomial`: `(x1, x2) -> gamma*x1'*x2 + coef0)^degree`
 
-  - `LIBSVM.Kernel.RadialBasis`: `(x1, x2) -> (exp(-gamma*norm(x1, x2)^2)`
+  - `LIBSVM.Kernel.RadialBasis`: `(x1, x2) -> (exp(-gamma*norm(x1 - x2)^2))`
 
   - `LIBSVM.Kernel.Sigmoid`: `(x1, x2) - > tanh(gamma*x1'*x2 + coef0)`
 
@@ -876,9 +876,10 @@ $(MMI.doc_header(NuSVC))
 
 $DOC_ALGORITHM
 
-This model is simply a re-parameterization of the [`SVC`](@ref)
-classifier, where `nu` replaces `cost`, and is therefore mathematically
-equivalent to it.
+This model is a re-parameterization of the [`SVC`](@ref) classifier,
+where `nu` replaces `cost`, and is therefore mathematically equivalent
+to it. The parameter `nu` allows more direct control over the number
+of support vectors (see under "Hyper-parameters below").
 
 
 # Training data
@@ -906,7 +907,10 @@ $DOC_KERNEL
 
 - `nu=0.5` (range (0, 1]): An upper bound on the fraction of margin
   errors and a lower bound of the fraction of support vectors. Denoted
-  `ν` in the cited paper.
+  `ν` in the cited paper. Changing `nu` changes the thickness of the
+  margin (a neighborhood of the decision surface) and a margin error
+  is said to have occurred if a training observation lies on the wrong
+  side of the surface or within the margin.
 
 - `cachesize=200.0` cache memory size in MB
 
@@ -1139,9 +1143,12 @@ Train the machine using `fit!(mach, rows=...)`.
 - `cost=1.0` (range (0, `Inf`)): the parameter denoted ``C`` in the
   cited reference; for greater regularization, decrease `cost`
 
-- `nu=0.5` (range (0, 1]): An upper bound on the fraction of margin
-  errors and a lower bound of the fraction of support vectors. Denoted
-  ``ν`` in the cited paper.
+- `nu=0.5` (range (0, 1]): An upper bound on the fraction of training
+  errors and a lower bound of the fraction of support vectors.
+  Denoted ``ν`` in the cited paper. Changing `nu` changes the
+  thickness of some neighborhood of the graph of the prediction
+  function (called a "tube" or "slab") and a training error is said to
+  occur when a data point `(x, y)` lies outside of that neighborhood.
 
 - `cachesize=200.0` cache memory size in MB
 
@@ -1258,7 +1265,10 @@ $DOC_KERNEL
 
 - `nu=0.5` (range (0, 1]): An upper bound on the fraction of margin
   errors and a lower bound of the fraction of support vectors. Denoted
-  `ν` in the cited paper.
+  `ν` in the cited paper. Changing `nu` changes the thickness of the
+  margin (a neighborhood of the decision surface) and a margin error
+  is said to have occurred if a training observation lies on the wrong
+  side of the surface or within the margin.
 
 - `cachesize=200.0` cache memory size in MB
 
