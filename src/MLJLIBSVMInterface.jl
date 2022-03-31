@@ -575,15 +575,14 @@ const DOC_ALGORITHM_LINEAR = "Reference for algorithm and core C-library: "*
 const DOC_SERIALIZABILITY = "Serialization of "*
     "models with user-defined kernels comes with some restrictions. "*
     "See [LIVSVM.jl issue"*
-    "91](https://github.com/JuliaML/LIBSVM.jl/issues/91]"*
-    "(https://github.com/JuliaML/LIBSVM.jl/issues/91)"
+    "91](https://github.com/JuliaML/LIBSVM.jl/issues/91)"
 
 const DOC_KERNEL = """
 - `kernel=LIBSVM.Kernel.RadialBasis`: either an object that can be
   called, as in `kernel(x1, x2)`, or one of the built-in kernels from
   the LIBSVM.jl package listed below.  Here `x1` and `x2` are vectors
-  whose lengths match the number of columns of the training data `X`,
-  see examples below.
+  whose lengths match the number of columns of the training data `X` (see
+  "Examples" below).
 
   - `LIBSVM.Kernel.Linear`: `(x1, x2) -> x1'*x2`
 
@@ -729,10 +728,10 @@ julia> yhat = predict(mach, Xnew)
 ```
 
 
-See also the [`SVC`](@ref) and [`NuSVC`] classifiers, and
-[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
-[documentation](https://github.com/cjlin1/liblinear/blob/master/README)
-for the original C implementation.
+See also the [`SVC`](@ref) and [`NuSVC`](@ref) classifiers, and
+[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the original C
+implementation
+[documentation](https://github.com/cjlin1/liblinear/blob/master/README).
 
 """
 LinearSVC
@@ -819,7 +818,7 @@ The fields of `report(mach)` are:
 using MLJ
 import LIBSVM
 
-SVC = @load SVC pkg=LIBSVM               # model type
+SVC = @load SVC pkg=LIBSVM                   # model type
 model = SVC(kernel=LIBSVM.Kernel.Polynomial) # instance
 
 X, y = @load_iris # table, vector
@@ -867,9 +866,9 @@ julia> yhat = predict(mach, Xnew)
 ```
 
 See also the classifiers [`NuSVC`](@ref) and [`LinearSVC`](@ref), and
-[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
-[documentation](https://github.com/cjlin1/libsvm/blob/master/README)
-for the original C implementation.
+[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the original C
+implementation
+[documentation](https://github.com/cjlin1/libsvm/blob/master/README).
 
 """
 SVC
@@ -883,9 +882,9 @@ $(MMI.doc_header(NuSVC))
 $DOC_ALGORITHM
 
 This model is a re-parameterization of the [`SVC`](@ref) classifier,
-where `nu` replaces `cost`, and is therefore mathematically equivalent
-to it. The parameter `nu` allows more direct control over the number
-of support vectors (see under "Hyper-parameters below").
+where `nu` replaces `cost`, and is mathematically equivalent to
+it. The parameter `nu` allows more direct control over the number of
+support vectors (see under "Hyper-parameters").
 
 
 # Training data
@@ -956,7 +955,7 @@ The fields of `report(mach)` are:
 using MLJ
 import LIBSVM
 
-NuSVC = @load NuSVC pkg=LIBSVM               # model type
+NuSVC = @load NuSVC pkg=LIBSVM                 # model type
 model = NuSVC(kernel=LIBSVM.Kernel.Polynomial) # instance
 
 X, y = @load_iris # table, vector
@@ -989,9 +988,10 @@ julia> yhat = predict(mach, Xnew)
 ```
 
 See also the classifiers [`SVC`](@ref) and [`LinearSVC`](@ref),
-[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
-[documentation](https://github.com/cjlin1/libsvm/blob/master/README)
-for the original C implementation.
+[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the original C
+implementation.
+[documentation](https://github.com/cjlin1/libsvm/blob/master/README).
+
 
 """
 NuSVC
@@ -1035,8 +1035,11 @@ $DOC_KERNEL
   cited reference; for greater regularization, decrease `cost`
 
 - `epsilon=0.1` (range (0, `Inf`)): the parameter denoted ``ϵ`` in the
-  cited reference; `epsilon` is the thickness of the "penalty-free"
-  neighborhood of the decision surface.
+  cited reference; `epsilon` is the thickness of the penalty-free
+  neighborhood of the graph of the prediction function ("slab"
+  or "tube"). Specifically, a data point `(x, y)` incurs no training
+  loss unless it is outside this neighborhood; the further away it is
+  from the this neighborhood, the greater the loss penalty.
 
 - `cachesize=200.0` cache memory size in MB
 
@@ -1103,9 +1106,9 @@ julia> yhat = predict(mach, Xnew)
 ```
 
 See also [`NuSVR`](@ref),
-[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
-[documentation](https://github.com/cjlin1/libsvm/blob/master/README)
-for the original C implementation.
+[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the original C
+implementation
+[documentation](https://github.com/cjlin1/libsvm/blob/master/README).
 
 """
 EpsilonSVR
@@ -1153,8 +1156,8 @@ Train the machine using `fit!(mach, rows=...)`.
   errors and a lower bound of the fraction of support vectors.
   Denoted ``ν`` in the cited paper. Changing `nu` changes the
   thickness of some neighborhood of the graph of the prediction
-  function (called a "tube" or "slab") and a training error is said to
-  occur when a data point `(x, y)` lies outside of that neighborhood.
+  function ("tube" or "slab") and a training error is said to occur
+  when a data point `(x, y)` lies outside of that neighborhood.
 
 - `cachesize=200.0` cache memory size in MB
 
@@ -1191,7 +1194,7 @@ The fields of `report(mach)` are:
 using MLJ
 import LIBSVM
 
-NuSVR = @load NuSVR pkg=LIBSVM            # model type
+NuSVR = @load NuSVR pkg=LIBSVM                 # model type
 model = NuSVR(kernel=LIBSVM.Kernel.Polynomial) # instance
 
 X, y = make_regression(rng=123) # table, vector
@@ -1221,9 +1224,9 @@ julia> yhat = predict(mach, Xnew)
 ```
 
 See also [`EpsilonSVR`](@ref),
-[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
-[documentation](https://github.com/cjlin1/libsvm/blob/master/README)
-for the original C implementation.
+[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the original C
+implementation
+[documentation](https://github.com/cjlin1/libsvm/blob/master/README).
 
 """
 NuSVR
@@ -1416,9 +1419,10 @@ julia> yhat = transform(mach, Xnew)
 ```
 
 See also [LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
-[documentation](https://github.com/cjlin1/libsvm/blob/master/README)
-for the original C implementation. For an alternative source of
-outlier detection models with an MLJ interface, see
+original C implementation
+[documentation](https://github.com/cjlin1/libsvm/blob/master/README). For
+an alternative source of outlier detection models with an MLJ
+interface, see
 [OutlierDetection.jl](https://outlierdetectionjl.github.io/OutlierDetection.jl/dev/).
 
 """
