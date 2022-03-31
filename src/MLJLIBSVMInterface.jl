@@ -572,6 +572,12 @@ const DOC_REFERENCE2 = "Rong-En Fan et al (2008): \"LIBLINEAR: A Library for "*
 const DOC_ALGORITHM_LINEAR = "Reference for algorithm and core C-library: "*
     "$DOC_REFERENCE2. "
 
+const DOC_SERIALIZABILITY = "Serialization of "*
+    "models with user-defined kernels comes with some restrictions. "*
+    "See [LIVSVM.jl issue"*
+    "91](https://github.com/JuliaML/LIBSVM.jl/issues/91]"*
+    "(https://github.com/JuliaML/LIBSVM.jl/issues/91)"
+
 const DOC_KERNEL = """
 - `kernel=LIBSVM.Kernel.RadialBasis`: either an object that can be
   called, as in `kernel(x1, x2)`, or one of the built-in kernels from
@@ -587,7 +593,7 @@ const DOC_KERNEL = """
 
   - `LIBSVM.Kernel.Sigmoid`: `(x1, x2) - > tanh(gamma*x1'*x2 + coef0)`
 
-  Here `gamma`, `coef0`, `degree` are other hyper-parameters.
+  Here `gamma`, `coef0`, `degree` are other hyper-parameters. $DOC_SERIALIZABILITY
 
 - `gamma = 0.0`: kernel parameter (see above); if `gamma==-1.0` then
   `gamma = 1/nfeatures` is used in training, where `nfeatures` is the
