@@ -30,6 +30,14 @@ import LIBSVM
                  MLJLIBSVMInterface.encode(Dict('d'=> 1.0), v))
 end
 
+@testset "orientation of scores" begin
+    scores = [1, 1, 1, 1, 0]
+    @test MLJLIBSVMInterface.orientation(scores) == -1
+    @test MLJLIBSVMInterface.orientation(-scores) == 1
+    @test MLJLIBSVMInterface.orientation(scores .+ 100) == -1
+    @test MLJLIBSVMInterface.orientation(-scores .+ 100) == 1
+end
+
 
 ## CLASSIFIERS
 
@@ -55,6 +63,15 @@ lcpred = MLJBase.predict(linear_classifier, fitresultCL, selectrows(X, test));
 @test Set(classes(pcpred[1])) == Set(classes(y[1]))
 @test Set(classes(nucpred[1])) == Set(classes(y[1]))
 @test Set(classes(lcpred[1])) == Set(classes(y[1]))
+
+fpC = MLJBase.fitted_params(plain_classifier, fitresultC)
+fpCnu = MLJBase.fitted_params(nu_classifier, fitresultCnu)
+fpCL = MLJBase.fitted_params(linear_classifier, fitresultCL)
+
+for fp in [fpC, fpCnu, fpCL]
+    @test keys(fp) == (:libsvm_model, :encoding)
+    @test fp.encoding[int(MLJBase.classes(y)[1])] == classes(y)[1]
+end
 
 rng = StableRNGs.StableRNG(123)
 
@@ -93,6 +110,13 @@ fitresultR, cacheR, reportR = MLJBase.fit(plain_regressor, 1,
 fitresultRnu, cacheRnu, reportRnu = MLJBase.fit(nu_regressor, 1,
                                                 selectrows(X, train), y[train]);
 
+fpR = MLJBase.fitted_params(plain_regressor, fitresultR)
+fpRnu = MLJBase.fitted_params(nu_regressor, fitresultRnu)
+
+for fp in [fpR, fpRnu]
+    @test fp.libsvm_model isa LIBSVM.SVM
+end
+
 rpred = MLJBase.predict(plain_regressor, fitresultR, selectrows(X, test));
 nurpred = MLJBase.predict(nu_regressor, fitresultRnu, selectrows(X, test));
 
@@ -102,24 +126,68 @@ nurpred = MLJBase.predict(nu_regressor, fitresultRnu, selectrows(X, test));
 
 ## ANOMALY DETECTION
 
+N = 50
+rng = StableRNGs.StableRNG(123)
+Xmatrix = randn(rng, 2N, 3)
+
+# insert outliers at observation 1 and N:
+Xmatrix[1, 1] = 100.0
+Xmatrix[N, 3] = 200.0
+
+X = MLJBase.table(Xmatrix)
+
 oneclasssvm = OneClassSVM()
 
-fitresultoc, cacheoc, reportoc = MLJBase.fit(oneclasssvm, 1,
-                                          selectrows(X, train));
-# output is CategoricalArray{Bool}
-ocpred = MLJBase.transform(oneclasssvm,
-                           fitresultoc,
-                           selectrows(X, test));
+fitresultoc, cacheoc, reportoc = MLJBase.fit(oneclasssvm, 1, X)
 
-# test whether the proprotion of outliers corresponds to the `nu` parameter
-@test isapprox((length(train) - sum(MLJBase.transform(oneclasssvm, fitresultoc, selectrows(X, train)) .== true)) / length(train), oneclasssvm.nu, atol=0.005)
-@test isapprox((length(test) - sum(ocpred .== true))  / length(test), oneclasssvm.nu, atol=0.05)
+fp = MLJBase.fitted_params(oneclasssvm, fitresultoc)
+@test fp.libsvm_model isa LIBSVM.SVM
 
-## PRECOMPUTED KERNELS
+training_scores = reportoc.scores
+scores = MLJBase.transform(oneclasssvm, fitresultoc, X)
 
-model = @test_logs((:warn, MLJLIBSVMInterface.WARN_PRECOMPUTED_KERNEL),
+@test scores == training_scores
+
+# crude extraction of outliers from scores:
+midpoint = mean([minimum(scores), maximum(scores)])
+outlier_indices = filter(eachindex(scores)) do i
+    scores[i] .> midpoint
+end
+
+@test outlier_indices == [1, N]
+
+
+## CONSTRUCTOR FAILS
+
+@test_throws(MLJLIBSVMInterface.ERR_PRECOMPUTED_KERNEL,
+             SVC(kernel=LIBSVM.Kernel.Precomputed))
+
+
+## CALLABLE KERNEL
+
+X, y = make_blobs()
+
+kernel(x1, x2) = x1' * x2
+
+model  = SVC(kernel=kernel)
+model₂ = SVC(kernel=LIBSVM.Kernel.Linear)
+
+fitresult, cache, report = MLJBase.fit(model, 0, X, y);
+fitresult₂, cache₂, report₂ = MLJBase.fit(model₂, 0, X, y);
+
+@test fitresult[1].rho ≈ fitresult₂[1].rho
+@test fitresult[1].coefs ≈ fitresult₂[1].coefs
+@test fitresult[1].SVs.indices ≈ fitresult₂[1].SVs.indices
+
+yhat = MLJBase.predict(model, fitresult, X);
+yhat₂ = MLJBase.predict(model₂, fitresult₂, X);
+
+@test yhat == yhat₂
+
+@test accuracy(yhat, y) > 0.75
+
+model = @test_throws(MLJLIBSVMInterface.ERR_PRECOMPUTED_KERNEL,
                    SVC(kernel=LIBSVM.Kernel.Precomputed))
-@test model.kernel == LIBSVM.Kernel.RadialBasis
 
 
 ## WEIGHTS
@@ -141,24 +209,24 @@ for model in [SVC(), LinearSVC()]
 
     # without weights:
     Θ, _, _ = MLJBase.fit(model, 0, Xtrain, ytrain)
-    yhat = predict(model, Θ, X);
-    @test levels(yhat) == levels(y) # the `2` class persists as a level
+    ŷ = predict(model, Θ, X);
+    @test levels(ŷ) == levels(y) # the `2` class persists as a level
 
     # with uniform weights:
     Θ_uniform, _, _ = MLJBase.fit(model, 0, Xtrain, ytrain, weights_uniform)
-    yhat_uniform = predict(model, Θ_uniform, X);
-    @test levels(yhat_uniform) == levels(y)
+    ŷ_uniform = predict(model, Θ_uniform, X);
+    @test levels(ŷ_uniform) == levels(y)
 
     # with weights favouring class `3`:
     Θ_favouring_3, _, _ = MLJBase.fit(model, 0, Xtrain, ytrain, weights_favouring_3)
-    yhat_favouring_3 = predict(model, Θ_favouring_3, X);
-    @test levels(yhat_favouring_3) == levels(y)
+    ŷ_favouring_3 = predict(model, Θ_favouring_3, X);
+    @test levels(ŷ_favouring_3) == levels(y)
 
     # comparisons:
     if !(model isa LinearSVC) # linear solver is not deterministic
-        @test yhat_uniform == yhat
+        @test ŷ_uniform == ŷ
     end
-    d = sum(yhat_favouring_3 .== 3) - sum(yhat .== 3)
+    d = sum(ŷ_favouring_3 .== 3) - sum(ŷ .== 3)
     if d <= 0
         @show model
         @show d
