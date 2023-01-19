@@ -2,11 +2,10 @@ using MLJBase
 using Test
 using LinearAlgebra
 using CategoricalArrays
-
 using MLJLIBSVMInterface
 import StableRNGs
 import LIBSVM
-
+import MLJTestInterface
 
 ## HELPERS
 
@@ -36,6 +35,55 @@ end
     @test MLJLIBSVMInterface.orientation(-scores) == 1
     @test MLJLIBSVMInterface.orientation(scores .+ 100) == -1
     @test MLJLIBSVMInterface.orientation(-scores .+ 100) == 1
+end
+
+
+## GENERIC MLJ INTERFACE TETS
+
+@testset "generic interface tests" begin
+    @testset "classifiers" begin
+        for data in [
+            MLJTestInterface.make_binary(),
+            MLJTestInterface.make_multiclass(),
+        ]
+            failures, summary = MLJTestInterface.test(
+                [MLJLIBSVMInterface.LinearSVC,
+                 MLJLIBSVMInterface.SVC,
+                 MLJLIBSVMInterface.ProbabilisticSVC,
+                 MLJLIBSVMInterface.NuSVC,
+                 MLJLIBSVMInterface.ProbabilisticNuSVC,
+                 ],
+                data...;
+                mod=@__MODULE__,
+                verbosity=0, # bump to debug
+                throw=false, # set to true to debug
+            )
+            @test isempty(failures)
+        end
+    end
+    @testset "regressors" begin
+        failures, summary = MLJTestInterface.test(
+            [MLJLIBSVMInterface.EpsilonSVR,
+             MLJLIBSVMInterface.NuSVR,
+             ],
+            MLJTestInterface.make_regression()...;
+            mod=@__MODULE__,
+            verbosity=0, # bump to debug
+            throw=false, # set to true to debug
+        )
+        @test isempty(failures)
+    end
+    @testset "one-class classifier" begin
+        X, _ = MLJTestInterface.make_regression()
+        failures, summary = MLJTestInterface.test(
+            [MLJLIBSVMInterface.OneClassSVM,],
+            X;
+            mod=@__MODULE__,
+            verbosity=0, # bump to debug
+            throw=false, # set to true to debug
+        )
+        @test isempty(failures)
+    end
 end
 
 
