@@ -61,7 +61,6 @@ for Model in [:SVC, :ProbabilisticSVC]
             coef0::Float64
             tolerance::Float64
             shrinking::Bool
-            probability::Bool
         end
 
         function $Model(
@@ -73,7 +72,7 @@ for Model in [:SVC, :ProbabilisticSVC]
             ,coef0::Float64 = 0.0
             ,tolerance::Float64 = .001
             ,shrinking::Bool = true
-            ,probability::Bool = false)
+            )
 
             model = $Model(
                 kernel
@@ -84,7 +83,6 @@ for Model in [:SVC, :ProbabilisticSVC]
                 ,coef0
                 ,tolerance
                 ,shrinking
-                ,probability
             )
 
             message = MMI.clean!(model)
@@ -870,13 +868,6 @@ $DOC_KERNEL
 
 - `shrinking=true`: whether to use shrinking heuristics
 
-- `probability=false`: whether to base classification on calibrated
-  probabilities (expensive) or to use the raw decision function
-  (recommended). Note that in either case `predict` returns point
-  predictions and not probabilities, so that this option has little
-  utility in the current re-implementation.
-
-
 # Operations
 
 - `predict(mach, Xnew)`: return predictions of the target given
@@ -1012,12 +1003,6 @@ $DOC_KERNEL
 - `tolerance=0.001`: tolerance for the stopping criterion
 
 - `shrinking=true`: whether to use shrinking heuristics
-
-- `probability=false`: whether to base classification on calibrated
-  probabilities (expensive) or to use the raw decision function
-  (recommended). Note that in either case `predict` returns point
-  predictions and not probabilities, so that this option has little
-  utility in the current re-implementation.
 
 
 # Operations
