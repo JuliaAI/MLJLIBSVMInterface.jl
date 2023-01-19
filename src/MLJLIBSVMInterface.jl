@@ -4,6 +4,8 @@ export LinearSVC, SVC
 export NuSVC, NuSVR
 export EpsilonSVR
 export OneClassSVM
+export ProbabilisticSVC
+export ProbabilisticNuSVC
 
 import MLJModelInterface
 import MLJModelInterface: Table, Continuous, Count, Finite, OrderedFactor,
@@ -26,7 +28,8 @@ mutable struct LinearSVC <: MMI.Deterministic
 end
 
 function LinearSVC(
-    ;solver::LIBSVM.Linearsolver.LINEARSOLVER = LIBSVM.Linearsolver.L2R_L2LOSS_SVC_DUAL
+    ;solver::LIBSVM.Linearsolver.LINEARSOLVER =
+        LIBSVM.Linearsolver.L2R_L2LOSS_SVC_DUAL
     ,tolerance::Float64 = Inf
     ,cost::Float64 = 1.0
     ,bias::Float64= -1.0)
@@ -44,83 +47,97 @@ function LinearSVC(
     return model
 end
 
-mutable struct SVC <: MMI.Deterministic
-    kernel
-    gamma::Float64
-    cost::Float64
-    cachesize::Float64
-    degree::Int32
-    coef0::Float64
-    tolerance::Float64
-    shrinking::Bool
-    probability::Bool
+for Model in [:SVC, :ProbabilisticSVC]
+
+    SuperType = Model === :SVC ? :Deterministic : :Probabilistic
+
+    quote
+        mutable struct $Model <: MMI.$SuperType
+            kernel
+            gamma::Float64
+            cost::Float64
+            cachesize::Float64
+            degree::Int32
+            coef0::Float64
+            tolerance::Float64
+            shrinking::Bool
+            probability::Bool
+        end
+
+        function $Model(
+            ;kernel = LIBSVM.Kernel.RadialBasis
+            ,gamma::Float64 = 0.0
+            ,cost::Float64 = 1.0
+            ,cachesize::Float64=200.0
+            ,degree::Int32 = Int32(3)
+            ,coef0::Float64 = 0.0
+            ,tolerance::Float64 = .001
+            ,shrinking::Bool = true
+            ,probability::Bool = false)
+
+            model = $Model(
+                kernel
+                ,gamma
+                ,cost
+                ,cachesize
+                ,degree
+                ,coef0
+                ,tolerance
+                ,shrinking
+                ,probability
+            )
+
+            message = MMI.clean!(model)
+            isempty(message) || @warn message
+
+            return model
+        end
+    end |> eval
 end
 
-function SVC(
-    ;kernel = LIBSVM.Kernel.RadialBasis
-    ,gamma::Float64 = 0.0
-    ,cost::Float64 = 1.0
-    ,cachesize::Float64=200.0
-    ,degree::Int32 = Int32(3)
-    ,coef0::Float64 = 0.0
-    ,tolerance::Float64 = .001
-    ,shrinking::Bool = true
-    ,probability::Bool = false)
+for Model in [:NuSVC, :ProbabilisticNuSVC]
 
-    model = SVC(
-        kernel
-        ,gamma
-        ,cost
-        ,cachesize
-        ,degree
-        ,coef0
-        ,tolerance
-        ,shrinking
-        ,probability
-    )
+    SuperType = Model === :NuSVC ? :Deterministic : :Probabilistic
 
-    message = MMI.clean!(model)   #> future proof by including these
-    isempty(message) || @warn message #> two lines even if no clean! defined below
+    quote
+        mutable struct $Model<: MMI.$SuperType
+            kernel
+            gamma::Float64
+            nu::Float64
+            cachesize::Float64
+            degree::Int32
+            coef0::Float64
+            tolerance::Float64
+            shrinking::Bool
+        end
 
-    return model
-end
+        function $Model(
+            ;kernel = LIBSVM.Kernel.RadialBasis
+            ,gamma::Float64 = 0.0
+            ,nu::Float64 = 0.5
+            ,cachesize::Float64 = 200.0
+            ,degree::Int32 = Int32(3)
+            ,coef0::Float64 = 0.
+                ,tolerance::Float64 = .001
+            ,shrinking::Bool = true)
 
-mutable struct NuSVC <: MMI.Deterministic
-    kernel
-    gamma::Float64
-    nu::Float64
-    cachesize::Float64
-    degree::Int32
-    coef0::Float64
-    tolerance::Float64
-    shrinking::Bool
-end
+            model = $Model(
+                kernel
+                ,gamma
+                ,nu
+                ,cachesize
+                ,degree
+                ,coef0
+                ,tolerance
+                ,shrinking
+            )
 
-function NuSVC(
-    ;kernel = LIBSVM.Kernel.RadialBasis
-    ,gamma::Float64 = 0.0
-    ,nu::Float64 = 0.5
-    ,cachesize::Float64 = 200.0
-    ,degree::Int32 = Int32(3)
-    ,coef0::Float64 = 0.
-    ,tolerance::Float64 = .001
-    ,shrinking::Bool = true)
+            message = MMI.clean!(model)   #> future proof by including these
+            isempty(message) || @warn message #> two lines even if no clean! defined below
 
-    model = NuSVC(
-        kernel
-        ,gamma
-        ,nu
-        ,cachesize
-        ,degree
-        ,coef0
-        ,tolerance
-        ,shrinking
-    )
-
-    message = MMI.clean!(model)   #> future proof by including these
-    isempty(message) || @warn message #> two lines even if no clean! defined below
-
-    return model
+            return model
+        end
+    end |> eval
 end
 
 mutable struct OneClassSVM <: MMI.UnsupervisedDetector
@@ -244,7 +261,24 @@ function EpsilonSVR(
 end
 
 # all SVM models defined here:
-const SVM = Union{LinearSVC, SVC, NuSVC, NuSVR, EpsilonSVR, OneClassSVM}
+const SVM = Union{
+    LinearSVC,
+    SVC,
+    ProbabilisticSVC,
+    NuSVC,
+    ProbabilisticNuSVC,
+    NuSVR,
+    EpsilonSVR,
+    OneClassSVM,
+}
+
+# excluding the LIBLINEAR models
+const NonlinearClassifier = Union{
+    SVC,
+    ProbabilisticSVC,
+    NuSVC,
+    ProbabilisticNuSVC,
+}
 
 
 # # CLEAN METHOD
@@ -282,12 +316,16 @@ Helper function to map the model to the correct LIBSVM model type
 needed for function dispatch.
 
 """
-function map_model_type(model::SVM)
+function map_model_type(model)
     if isa(model, LinearSVC)
         return LIBSVM.LinearSVC
     elseif isa(model, SVC)
         return LIBSVM.SVC
+    elseif isa(model, ProbabilisticSVC)
+        return LIBSVM.SVC
     elseif isa(model, NuSVC)
+        return LIBSVM.NuSVC
+    elseif isa(model, ProbabilisticNuSVC)
         return LIBSVM.NuSVC
     elseif isa(model, NuSVR)
         return LIBSVM.NuSVR
@@ -301,13 +339,14 @@ function map_model_type(model::SVM)
 end
 
 """
-    get_svm_parameters(model::Union{SVC, NuSVC, NuSVR, EpsilonSVR, OneClassSVM})
+    get_svm_parameters(model)
 
 Private method.
 
 Helper function to get the parameters from the SVM model struct.
+
 """
-function get_svm_parameters(model::Union{SVC, NuSVC, NuSVR, EpsilonSVR, OneClassSVM})
+function get_svm_parameters(model)
     #Build arguments for calling svmtrain
     params = Tuple{Symbol, Any}[]
     push!(params, (:svmtype, map_model_type(model))) # get LIBSVM model type
@@ -384,7 +423,13 @@ end
 
 # # FIT METHOD
 
-function MMI.fit(model::LinearSVC, verbosity::Int, X, y, weights=nothing)
+function MMI.fit(
+    model::LinearSVC,
+    verbosity,
+    X,
+    y,
+    weights=nothing,
+    )
 
     Xmatrix = MMI.matrix(X)' # notice the transpose
     y_plain = MMI.int(y)
@@ -412,7 +457,13 @@ end
 MMI.fitted_params(::LinearSVC, fitresult) =
     (libsvm_model=fitresult[1], encoding=get_encoding(fitresult[2]))
 
-function MMI.fit(model::Union{SVC, NuSVC}, verbosity::Int, X, y, weights=nothing)
+function MMI.fit(
+    model::NonlinearClassifier,
+    verbosity,
+    X,
+    y,
+    weights=nothing
+    )
 
     Xmatrix = MMI.matrix(X)' # notice the transpose
     y_plain = MMI.int(y)
@@ -425,13 +476,20 @@ function MMI.fit(model::Union{SVC, NuSVC}, verbosity::Int, X, y, weights=nothing
         encode(weights, y)
     end
 
+    # probability calibration?
+    probability = model isa Union{SVC, NuSVC} ? false : true
+
     model = deepcopy(model)
     model.gamma == -1.0 && (model.gamma = 1.0/size(Xmatrix, 1))
     model.gamma == 0.0 && (model.gamma = 1.0/(var(Xmatrix) * size(Xmatrix, 1)) )
-    result = LIBSVM.svmtrain(Xmatrix, y_plain;
-                             get_svm_parameters(model)..., weights=_weights,
-                             verbose = ifelse(verbosity > 1, true, false)
-                             )
+    result = LIBSVM.svmtrain(
+        Xmatrix,
+        y_plain;
+        get_svm_parameters(model)...,
+        probability,
+        weights=_weights,
+        verbose = ifelse(verbosity > 1, true, false),
+    )
 
     fitresult = (result, decode)
     cache = nothing
@@ -440,9 +498,8 @@ function MMI.fit(model::Union{SVC, NuSVC}, verbosity::Int, X, y, weights=nothing
     return fitresult, cache, report
 end
 
-MMI.fitted_params(::Union{SVC, NuSVC}, fitresult) =
+MMI.fitted_params(::NonlinearClassifier, fitresult) =
     (libsvm_model=fitresult[1], encoding=get_encoding(fitresult[2]))
-
 
 function MMI.fit(model::Union{NuSVR, EpsilonSVR}, verbosity::Int, X, y)
 
@@ -510,6 +567,16 @@ function MMI.predict(model::Union{SVC, NuSVC}, fitresult, Xnew)
     return decode(p)
 end
 
+function MMI.predict(model::Union{ProbabilisticSVC, ProbabilisticNuSVC}, fitresult, Xnew)
+    result, decode = fitresult
+    _, probabilities = LIBSVM.svmpredict(result, MMI.matrix(Xnew)')
+    # the classes, in form given to LIBSVM, in the order corresponding to probability
+    # output (not necessarily numerical order):
+    _classes = result.labels
+    support = decode.(_classes)
+    return MMI.UnivariateFinite(support, probabilities')
+end
+
 function MMI.predict(model::Union{NuSVR, EpsilonSVR}, fitresult, Xnew)
     (p,d) = LIBSVM.svmpredict(fitresult, MMI.matrix(Xnew)')
     return p
@@ -523,20 +590,31 @@ function MMI.transform(model::OneClassSVM, fitresult, Xnew)
 end
 
 
-# metadata
-MMI.load_path(::Type{<:LinearSVC}) = "$PKG.LinearSVC"
-MMI.load_path(::Type{<:SVC}) = "$PKG.SVC"
-MMI.load_path(::Type{<:NuSVC}) = "$PKG.NuSVC"
-MMI.load_path(::Type{<:NuSVR}) = "$PKG.NuSVR"
-MMI.load_path(::Type{<:EpsilonSVR}) = "$PKG.EpsilonSVR"
-MMI.load_path(::Type{<:OneClassSVM}) = "$PKG.OneClassSVM"
+for Model in [
+    :LinearSVC,
+    :SVC,
+    :ProbabilisticSVC,
+    :NuSVC,
+    :ProbabilisticNuSVC,
+    :NuSVR,
+    :EpsilonSVR,
+    :OneClassSVM,
+    ]
+    ModelStr = string(Model)
+    quote
+        MMI.load_path(::Type{<:$Model}) = "$PKG."*$ModelStr
+    end |> eval
+end
 
 MMI.supports_class_weights(::Type{<:LinearSVC}) = true
 MMI.supports_class_weights(::Type{<:SVC}) = true
+MMI.supports_class_weights(::Type{<:ProbabilisticSVC}) = true
 
 MMI.human_name(::Type{<:LinearSVC}) = "linear support vector classifier"
 MMI.human_name(::Type{<:SVC}) = "C-support vector classifier"
+MMI.human_name(::Type{<:ProbabilisticSVC}) = "probabilistic C-support vector classifier"
 MMI.human_name(::Type{<:NuSVC}) = "ν-support vector classifier"
+MMI.human_name(::Type{<:ProbabilisticNuSVC}) = "probabilistic ν-support vector classifier"
 MMI.human_name(::Type{<:NuSVR}) = "ν-support vector regressor"
 MMI.human_name(::Type{<:EpsilonSVR}) = "ϵ-support vector regressor"
 MMI.human_name(::Type{<:OneClassSVM}) = "$one-class support vector machine"
@@ -546,12 +624,17 @@ MMI.package_uuid(::Type{<:SVM}) = "b1bec4e5-fd48-53fe-b0cb-9723c09d164b"
 MMI.is_pure_julia(::Type{<:SVM}) = false
 MMI.package_url(::Type{<:SVM}) = "https://github.com/mpastell/LIBSVM.jl"
 MMI.input_scitype(::Type{<:SVM}) = Table(Continuous)
-MMI.target_scitype(::Type{<:Union{LinearSVC, SVC, NuSVC}}) =
-    AbstractVector{<:Finite}
+MMI.target_scitype(::Type{<:Union{
+    LinearSVC,
+    SVC,
+    ProbabilisticSVC,
+    NuSVC,
+    ProbabilisticNuSVC,
+}}) = AbstractVector{<:Finite}
 MMI.target_scitype(::Type{<:Union{NuSVR, EpsilonSVR}}) =
     AbstractVector{Continuous}
 MMI.output_scitype(::Type{<:OneClassSVM}) =
-    AbstractVector{<:Finite{2}} # Bool (true means inlier)
+    AbstractVector{<:Finite{2}}
 
 
 # # DOCUMENT STRINGS
@@ -571,6 +654,11 @@ const DOC_REFERENCE2 = "Rong-En Fan et al (2008): \"LIBLINEAR: A Library for "*
 
 const DOC_ALGORITHM_LINEAR = "Reference for algorithm and core C-library: "*
     "$DOC_REFERENCE2. "
+
+const DOC_REFERENCE_PLATT =
+    "[Platt, John (1999): \"Probabilistic Outputs for Support Vector Machines "*
+    "and Comparisons to Regularized Likelihood Methods.\"]("*
+    "https://citeseerx.ist.psu.edu/doc_view/pid/42e5ed832d4310ce4378c44d05570439df28a393)"
 
 const DOC_SERIALIZABILITY = "Serialization of "*
     "models with user-defined kernels comes with some restrictions. "*
@@ -742,8 +830,10 @@ LinearSVC
 """
 $(MMI.doc_header(SVC))
 
-$DOC_ALGORITHM
+This model predicts actual class labels. To predict probabilities, use instead
+[`ProbabilisticSCV`](@ref).
 
+$DOC_ALGORITHM
 
 # Training data
 
@@ -865,26 +955,170 @@ julia> yhat = predict(mach, Xnew)
  "versicolor"
 ```
 
-See also the classifiers [`NuSVC`](@ref) and [`LinearSVC`](@ref), and
-[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the original C
-implementation
+See also the classifiers [`ProbabilisticSVC`](@ref), [`NuSVC`](@ref) and
+[`LinearSVC`](@ref). And see [LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
+original C implementation
 [documentation](https://github.com/cjlin1/libsvm/blob/master/README).
 
 """
 SVC
 
 
+# ## ProbabilisticSVC
+
+"""
+$(MMI.doc_header(ProbabilisticSVC))
+
+This model is identical to [`SVC`](@ref) with the exception that it predicts
+probabilities, instead of actual class labels. Probabilities are computed using Platt
+scaling, which will add to the total computation time.
+
+$DOC_ALGORITHM
+
+$DOC_REFERENCE_PLATT
+
+
+# Training data
+
+In MLJ or MLJBase, bind an instance `model` to data with one of:
+
+    mach = machine(model, X, y)
+    mach = machine(model, X, y, w)
+
+where
+
+- `X`: any table of input features (eg, a `DataFrame`) whose columns
+  each have `Continuous` element scitype; check column scitypes with
+  `schema(X)`
+
+- `y`: is the target, which can be any `AbstractVector` whose element
+  scitype is `<:OrderedFactor` or `<:Multiclass`; check the scitype
+  with `scitype(y)`
+
+- `w`: a dictionary of class weights, keyed on `levels(y)`.
+
+Train the machine using `fit!(mach, rows=...)`.
+
+
+# Hyper-parameters
+
+$DOC_KERNEL
+
+- `cost=1.0` (range (0, `Inf`)): the parameter denoted ``C`` in the
+  cited reference; for greater regularization, decrease `cost`
+
+- `cachesize=200.0` cache memory size in MB
+
+- `tolerance=0.001`: tolerance for the stopping criterion
+
+- `shrinking=true`: whether to use shrinking heuristics
+
+- `probability=false`: whether to base classification on calibrated
+  probabilities (expensive) or to use the raw decision function
+  (recommended). Note that in either case `predict` returns point
+  predictions and not probabilities, so that this option has little
+  utility in the current re-implementation.
+
+
+# Operations
+
+- `predict(mach, Xnew)`: return probabilistic predictions of the target given features
+  `Xnew` having the same scitype as `X` above.
+
+
+# Fitted parameters
+
+The fields of `fitted_params(mach)` are:
+
+- `libsvm_model`: the trained model object created by the LIBSVM.jl package
+
+- `encoding`: class encoding used internally by `libsvm_model` - a
+  dictionary of class labels keyed on the internal integer representation
+
+
+# Report
+
+The fields of `report(mach)` are:
+
+- `gamma`: actual value of the kernel parameter `gamma` used in training
+
+
+# Examples
+
+## Using a built-in kernel
+
+```
+using MLJ
+import LIBSVM
+
+ProbabilisticSVC = @load ProbabilisticSVC pkg=LIBSVM      # model type
+model = ProbabilisticSVC(kernel=LIBSVM.Kernel.Polynomial) # instance
+
+X, y = @load_iris # table, vector
+mach = machine(model, X, y) |> fit!
+
+Xnew = (sepal_length = [6.4, 7.2, 7.4],
+        sepal_width = [2.8, 3.0, 2.8],
+        petal_length = [5.6, 5.8, 6.1],
+        petal_width = [2.1, 1.6, 1.9],)
+
+julia> probs = predict(mach, Xnew)
+3-element UnivariateFiniteVector{Multiclass{3}, String, UInt32, Float64}:
+ UnivariateFinite{Multiclass{3}}(setosa=>0.00186, versicolor=>0.003, virginica=>0.995)
+ UnivariateFinite{Multiclass{3}}(setosa=>0.000563, versicolor=>0.0554, virginica=>0.944)
+ UnivariateFinite{Multiclass{3}}(setosa=>1.4e-6, versicolor=>1.68e-6, virginica=>1.0)
+
+
+julia> labels = mode.(probs)
+3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
+ "virginica"
+ "virginica"
+ "virginica"
+```
+
+## User-defined kernels
+
+```
+k(x1, x2) = x1'*x2 # equivalent to `LIBSVM.Kernel.Linear`
+model = ProbabilisticSVC(kernel=k)
+mach = machine(model, X, y) |> fit!
+
+probs = predict(mach, Xnew)
+```
+
+## Incorporating class weights
+
+In either scenario above, we can do:
+
+```julia
+weights = Dict("virginica" => 1, "versicolor" => 20, "setosa" => 1)
+mach = machine(model, X, y, weights) |> fit!
+
+probs = predict(mach, Xnew)
+```
+
+See also the classifiers [`SVC`](@ref), [`NuSVC`](@ref) and [`LinearSVC`](@ref), and
+[LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the original C
+implementation
+[documentation](https://github.com/cjlin1/libsvm/blob/master/README).
+
+"""
+ProbabilisticSVC
+
 # ## NuSVC
 
 """
 $(MMI.doc_header(NuSVC))
 
-$DOC_ALGORITHM
-
 This model is a re-parameterization of the [`SVC`](@ref) classifier,
 where `nu` replaces `cost`, and is mathematically equivalent to
 it. The parameter `nu` allows more direct control over the number of
 support vectors (see under "Hyper-parameters").
+
+This model always predicts actual class labels. For probabilistic predictions, use instead
+[`ProbabilisticNuSVC`](@ref).
+
+$DOC_ALGORITHM
 
 
 # Training data
@@ -995,6 +1229,132 @@ implementation.
 
 """
 NuSVC
+
+
+# ## ProbabilisticNuSVC
+
+"""
+$(MMI.doc_header(ProbabilisticNuSVC))
+
+This model is identical to [`NuSVC`](@ref) with the exception that it predicts
+probabilities, instead of actual class labels. Probabilities are computed using Platt
+scaling, which will add to total computation time.
+
+$DOC_ALGORITHM
+
+$DOC_REFERENCE_PLATT
+
+
+# Training data
+
+In MLJ or MLJBase, bind an instance `model` to data with:
+
+    mach = machine(model, X, y)
+
+where
+
+- `X`: any table of input features (eg, a `DataFrame`) whose columns
+  each have `Continuous` element scitype; check column scitypes with
+  `schema(X)`
+
+- `y`: is the target, which can be any `AbstractVector` whose element
+  scitype is `<:OrderedFactor` or `<:Multiclass`; check the scitype
+  with `scitype(y)`
+
+Train the machine using `fit!(mach, rows=...)`.
+
+
+# Hyper-parameters
+
+$DOC_KERNEL
+
+- `nu=0.5` (range (0, 1]): An upper bound on the fraction of margin
+  errors and a lower bound of the fraction of support vectors. Denoted
+  `ν` in the cited paper. Changing `nu` changes the thickness of the
+  margin (a neighborhood of the decision surface) and a margin error
+  is said to have occurred if a training observation lies on the wrong
+  side of the surface or within the margin.
+
+- `cachesize=200.0` cache memory size in MB
+
+- `tolerance=0.001`: tolerance for the stopping criterion
+
+- `shrinking=true`: whether to use shrinking heuristics
+
+
+# Operations
+
+- `predict(mach, Xnew)`: return predictions of the target given
+  features `Xnew` having the same scitype as `X` above.
+
+
+# Fitted parameters
+
+The fields of `fitted_params(mach)` are:
+
+- `libsvm_model`: the trained model object created by the LIBSVM.jl package
+
+- `encoding`: class encoding used internally by `libsvm_model` - a
+  dictionary of class labels keyed on the internal integer representation
+
+
+# Report
+
+The fields of `report(mach)` are:
+
+- `gamma`: actual value of the kernel parameter `gamma` used in training
+
+
+# Examples
+
+## Using a built-in kernel
+
+```
+using MLJ
+import LIBSVM
+
+ProbabilisticNuSVC = @load ProbabilisticNuSVC pkg=LIBSVM    # model type
+model = ProbabilisticNuSVC(kernel=LIBSVM.Kernel.Polynomial) # instance
+
+X, y = @load_iris # table, vector
+mach = machine(model, X, y) |> fit!
+
+Xnew = (sepal_length = [6.4, 7.2, 7.4],
+        sepal_width = [2.8, 3.0, 2.8],
+        petal_length = [5.6, 5.8, 6.1],
+        petal_width = [2.1, 1.6, 1.9],)
+
+julia> probs = predict(mach, Xnew)
+3-element UnivariateFiniteVector{Multiclass{3}, String, UInt32, Float64}:
+ UnivariateFinite{Multiclass{3}}(setosa=>0.00313, versicolor=>0.0247, virginica=>0.972)
+ UnivariateFinite{Multiclass{3}}(setosa=>0.000598, versicolor=>0.0155, virginica=>0.984)
+ UnivariateFinite{Multiclass{3}}(setosa=>2.27e-6, versicolor=>2.73e-6, virginica=>1.0)
+
+julia> yhat = mode.(probs)
+3-element CategoricalArrays.CategoricalArray{String,1,UInt32}:
+ "virginica"
+ "virginica"
+ "virginica"
+```
+
+## User-defined kernels
+
+```
+k(x1, x2) = x1'*x2 # equivalent to `LIBSVM.Kernel.Linear`
+model = ProbabilisticNuSVC(kernel=k)
+mach = machine(model, X, y) |> fit!
+
+probs = predict(mach, Xnew)
+```
+
+See also the classifiers [`NuSVC`](@ref), [`SVC`](@ref), [`ProbabilisticSVC`](@ref) and
+[`LinearSVC`](@ref). And see [LIVSVM.jl](https://github.com/JuliaML/LIBSVM.jl) and the
+original C implementation.
+[documentation](https://github.com/cjlin1/libsvm/blob/master/README).
+
+
+"""
+ProbabilisticNuSVC
 
 
 # ## EpsilonSVR
