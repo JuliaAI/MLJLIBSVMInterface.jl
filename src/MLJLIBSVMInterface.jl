@@ -829,7 +829,7 @@ LinearSVC
 $(MMI.doc_header(SVC))
 
 This model predicts actual class labels. To predict probabilities, use instead
-[`ProbabilisticSCV`](@ref).
+[`ProbabilisticSVC`](@ref).
 
 $DOC_ALGORITHM
 
