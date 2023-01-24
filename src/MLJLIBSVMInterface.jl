@@ -461,7 +461,7 @@ function MMI.fit(
     X,
     y,
     weights=nothing
-    )
+)
 
     Xmatrix = MMI.matrix(X)' # notice the transpose
     y_plain = MMI.int(y)
