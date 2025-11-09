@@ -52,7 +52,7 @@ end
                 data...;
                 mod=@__MODULE__,
                 verbosity=0, # bump to debug
-                throw=false, # set to true to debug
+                throw=true, # set to true to debug
             )
             @test isempty(failures)
         end
