@@ -10,7 +10,7 @@ export ProbabilisticNuSVC
 import MLJModelInterface
 import MLJModelInterface: Table, Continuous, Count, Finite, OrderedFactor,
                           Multiclass
-import CategoricalArrays
+import CategoricalArrays, CategoricalDistributions
 import LIBSVM
 using Statistics
 
@@ -384,13 +384,12 @@ function encode(weights::Dict, y)
     kys = CategoricalArrays.levels(y)
     Set(keys(weights)) == Set(kys) || throw(err_bad_weights(kys))
     _weights = fix_keys(weights, y)
-    levels_seen = unique(y) # not `CategoricalValue`s !
-    cvs = [categorical_value(x, y) for x in levels_seen]
-    return Dict(MMI.int(cv) => _weights[cv] for cv in cvs)
+    levels_seen = unique(y)
+    return Dict(CategoricalDistributions.int(cv) => _weights[cv] for cv in levels_seen)
 end
 
 function get_encoding(decoder)
-    refs = MMI.int.(decoder.classes)
+    refs = CategoricalDistributions.int.(CategoricalArrays.levels(decoder))
     return Dict(i => decoder(i) for i in refs)
 end
 
@@ -430,8 +429,8 @@ function MMI.fit(
     )
 
     Xmatrix = MMI.matrix(X)' # notice the transpose
-    y_plain = MMI.int(y)
-    decode  = MMI.decoder(y[1]) # for predict method
+    y_plain = CategoricalDistributions.int(y)
+    decode  = CategoricalDistributions.decoder(y[1]) # for predict method
 
     _weights = if weights == nothing
         nothing
@@ -464,8 +463,8 @@ function MMI.fit(
 )
 
     Xmatrix = MMI.matrix(X)' # notice the transpose
-    y_plain = MMI.int(y)
-    decode  = MMI.decoder(y[1]) # for predict method
+    y_plain = CategoricalDistributions.int(y)
+    decode  = CategoricalDistributions.decoder(y[1]) # for predict method
 
     _weights = if weights == nothing
         nothing

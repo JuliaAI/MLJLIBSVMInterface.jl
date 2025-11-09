@@ -6,6 +6,7 @@ using MLJLIBSVMInterface
 import StableRNGs
 import LIBSVM
 import MLJTestInterface
+using StatisticalMeasures
 
 @testset "`fix_keys` and `encode` for weight dicts" begin
     v = categorical(['a', 'b', 'b', 'c'])
@@ -51,7 +52,7 @@ end
                 data...;
                 mod=@__MODULE__,
                 verbosity=0, # bump to debug
-                throw=false, # set to true to debug
+                throw=true, # set to true to debug
             )
             @test isempty(failures)
         end
